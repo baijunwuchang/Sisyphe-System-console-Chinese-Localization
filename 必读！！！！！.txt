@@ -1,10 +1,13 @@
 这只是一个代码测试！！！！不代表最终结果并且缩减了很多内容，后续更新词库及内容请留意本仓库，并且手机移植也会缓慢推进
 
 
+本插件仅需编号提取列阵中的maurice-annotator文件即可使用，其他均为测试产物
+
+
 原网页：https://lell1203.github.io/maurice_simul/
 
 
-浏览器插件管理：edge://extensions/（注意！！必须选择开发者模式！！！点击加载解压缩的扩展，将本文件解压选中。随后在https://lell1203.github.io/maurice_simul/内点击扩展栏选中本插件使用）
+浏览器插件管理：edge://extensions/（注意！！必须选择开发者模式！！！点击加载解压缩的扩展，将maurice-annotator文件解压选中。随后在https://lell1203.github.io/maurice_simul/内点击扩展栏选中本插件使用）
 
 
 获取完全内容，反馈bug，提供人工翻译帮助请联系邮箱：2396048304@qq.com
