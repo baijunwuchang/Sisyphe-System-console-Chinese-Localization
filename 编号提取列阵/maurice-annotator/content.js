@@ -633,6 +633,58 @@
         return n;
     }
 
+    // ===== 导出核心 =====
+
+    // 导出未翻译词库
+    async function exportPendingDict() {
+        await loadStore();
+        const pendingGlobal = {};
+        const pendingPerPage = {};
+        // 用于记录每个词条出现在哪些编号里
+        const metadataIds = {};
+        const metadataPerPageIds = {};
+
+        // 遍历所有抓取的页面
+        for (const [pid, pg] of Object.entries(pagesStore)) {
+            for (const t of pg.texts) {
+                // 如果这已经是代码区的字符串，就跳过（通常不需要翻译）
+                if (t.type === 'code') continue;
+
+                // 检查是否已经有翻译（精确匹配或正则匹配）
+                const existingTrans = lookupTranslation(t.text, pid);
+
+                if (existingTrans === null) {
+                    // 没翻译，收集起来
+                    if (!metadataIds[t.text]) metadataIds[t.text] = [];
+                    if (!metadataIds[t.text].includes(t.id)) {
+                        metadataIds[t.text].push(t.id);
+                    }
+
+                    // 先默认放到 global 里（因为原文通常全页面通用）
+                    // 如果你确实想按页分开，可以放到 pendingPerPage[pid] 里，这里为了方便默认 global
+                    pendingGlobal[t.text] = "";
+                }
+            }
+        }
+
+        // 把带有编码的 idMap 也放进去，导入时插件会忽略这个字段，不影响运行
+        const payload = {
+            format: 'maurice-dict',
+            version: '1.0',
+            name: '待翻译词库',
+            description: '由插件自动生成的未翻译列表，填入译文后可直接导入生效',
+            global: pendingGlobal,
+            perPage: pendingPerPage,
+            _sourceIds: metadataIds // 这个字段仅用于给你方便查找，插件读取时会忽略
+        };
+
+        downloadFile(
+            JSON.stringify(payload, null, 2),
+            'dict_pending.json',
+            'application/json'
+        );
+    }
+
     // ===== 面板界面 =====
     function buildPanel() {
         if (panelEl) return panelEl;
@@ -677,7 +729,7 @@
         <div style="background:#111;border-radius:4px;padding:8px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
             <span style="color:#aaa;font-size:11px;">翻译编辑</span>
-            <span style="color:#f59e0b;font-size:10px;">💡 有数字用 {d} 代替，如 第{d}天</span>
+            <span style="color:#f59e0b;font-size:10px;">💡 有数字用 {d} 代替</span>
           </div>
           <input data-el="src" placeholder="原文（自动填或手动输）" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #444;color:#eee;padding:4px 6px;border-radius:4px;font-family:monospace;font-size:11px;margin-bottom:4px;" />
           <input data-el="dst" placeholder="译文" style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #444;color:#eee;padding:4px 6px;border-radius:4px;font-family:monospace;font-size:11px;margin-bottom:4px;" />
@@ -693,9 +745,10 @@
             <span style="color:#aaa;font-size:11px;">词库列表</span>
             <button data-act="import-dict" style="padding:3px 8px;background:#0ea5e9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">导入文件</button>
           </div>
-          <div data-el="dicts" style="max-height:180px;overflow:auto;font-family:monospace;font-size:11px;line-height:1.6;"></div>
+          <div data-el="dicts" style="max-height:140px;overflow:auto;font-family:monospace;font-size:11px;line-height:1.6;"></div>
           <div style="display:flex;gap:4px;margin-top:6px;">
-            <button data-act="export-all-dicts" style="flex:1;padding:5px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">合并导出启用的词库</button>
+            <button data-act="export-all-dicts" style="flex:1;padding:5px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">合并导出已翻</button>
+            <button data-act="export-pending" style="flex:1;padding:5px;background:#e11d48;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">导出未翻译</button>
           </div>
           <input data-el="file" type="file" accept=".json,application/json" style="display:none;" />
         </div>
@@ -704,7 +757,7 @@
           <span style="color:#aaa;font-size:11px;">抓取过的页面</span>
           <button data-act="refresh" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;">刷新</button>
         </div>
-        <div data-el="pages" style="max-height:140px;overflow:auto;background:#111;border-radius:4px;padding:6px;font-family:monospace;font-size:11px;line-height:1.6;margin-bottom:8px;"></div>
+        <div data-el="pages" style="max-height:120px;overflow:auto;background:#111;border-radius:4px;padding:6px;font-family:monospace;font-size:11px;line-height:1.6;margin-bottom:8px;"></div>
 
         <div style="display:flex;gap:6px;">
           <button data-act="export-json" style="flex:1;padding:6px;background:#10b981;color:#fff;border:none;border-radius:4px;cursor:pointer;">导出文本+翻译</button>
@@ -747,6 +800,7 @@
             else if (act === 'del-trans') await doDelTrans();
             else if (act === 'import-dict') panelEl.querySelector('[data-el="file"]').click();
             else if (act === 'export-all-dicts') await exportAllEnabledDicts();
+            else if (act === 'export-pending') await exportPendingDict();
             else if (act === 'export-json') await exportAll('json');
             else if (act === 'export-tsv') await exportAll('tsv');
         });
@@ -1023,7 +1077,7 @@
     (async () => {
         await loadStore();
         await resolvePageId(false);
-        applyTranslation(); // 这部分是无脑翻译
+        applyTranslation(); // 上来先无脑翻译一波
         annotations = extractAll(); // 然后把现有文本抓一遍备用
         startReplaceObserver(); // 开启监听，随时翻译动态加进来的东西
     })();
