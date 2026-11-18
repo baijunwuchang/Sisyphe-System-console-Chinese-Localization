@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Maurice 文本标注提取器",
-  "version": "2.0",
-  "description": "按 F1 标注页面文本，编号为 页面号-文本号，跨页索引查找，当前页高亮",
+  "version": "2.1",
+  "description": "按 F1 标注页面文本，只提取可见内容，跨页索引查找，当前页高亮",
   "permissions": [ "activeTab", "scripting", "downloads", "storage" ],
   "host_permissions": [ "https://lell1203.github.io/*" ],
   "action": { "default_title": "Maurice 标注（F1）" },

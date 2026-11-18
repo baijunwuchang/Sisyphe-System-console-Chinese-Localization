@@ -11,22 +11,30 @@
     const TOKEN_CLASS_RE = /^token-|\btoken\b|hljs-|syntax-/i;
     const KOREAN_RE = /[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/;
     const ENGLISH_RE = /[A-Za-z]/;
+    const INVISIBLE_CHARS_RE = /[\u200B-\u200D\uFEFF\u00AD\u2060]/g;
+    const MIN_RECT_WIDTH = 4;
+    const MIN_RECT_HEIGHT = 6;
 
     // ============================================================
     // 状态
     // ============================================================
-    let annotations = [];       // 当前页: { id, pageId, textId, type, text, node }
+    let annotations = [];
     let pageId = null;
-    let pageIdMap = {};         // { urlKey: pageId }
-    let pagesStore = {};        // { pageId: { url, title, extractedAt, texts: [...] } }
+    let pageIdMap = {};
+    let pagesStore = {};
     let pageCounter = 0;
 
     let overlayEl = null;
     let badgeItems = [];
+    let badgesVisible = true;   // 🔑 新状态：徽标是否显示
+
     let panelEl = null;
     let panelVisible = false;
     let highlightTimer = null;
     let highlightEls = [];
+
+    let visibleCache = new WeakMap();
+    let lastScanTotal = 0;
 
     // ============================================================
     // 存储
@@ -37,21 +45,12 @@
         pageCounter = d.pageCounter || 0;
         pagesStore = d.pages || {};
     }
-
     async function saveStore() {
-        await chrome.storage.local.set({
-            pageIdMap,
-            pageCounter,
-            pages: pagesStore
-        });
+        await chrome.storage.local.set({ pageIdMap, pageCounter, pages: pagesStore });
     }
-
     function urlKey() {
         return location.pathname + location.search + location.hash;
     }
-
-    // 解析/分配当前 URL 对应的页面号
-    // forceNew=true 时强制分配新页面号并覆盖当前 URL 的映射
     async function resolvePageId(forceNew = false) {
         if (forceNew) {
             pageCounter += 1;
@@ -64,7 +63,6 @@
             pageId = pageIdMap[urlKey()];
             return pageId;
         }
-        // 该 URL 从未分配过页面号，分配新的
         pageCounter += 1;
         pageId = 'P' + pageCounter;
         pageIdMap[urlKey()] = pageId;
@@ -73,10 +71,51 @@
     }
 
     // ============================================================
-    // 类型判断（ui / code）
+    // 可见性判断
+    // ============================================================
+    function isVisible(node) {
+        const el = node.parentElement;
+        if (!el) return false;
+        if (visibleCache.has(el)) return visibleCache.get(el);
+
+        let visible = true;
+        try {
+            if (typeof el.checkVisibility === 'function') {
+                visible = el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+            } else {
+                let cur = el, d = 0;
+                while (cur && d < 40) {
+                    let cs;
+                    try { cs = getComputedStyle(cur); } catch (_) { break; }
+                    if (
+                        cs.display === 'none' ||
+                        cs.visibility === 'hidden' ||
+                        cs.visibility === 'collapse' ||
+                        parseFloat(cs.opacity) === 0
+                    ) { visible = false; break; }
+                    cur = cur.parentElement;
+                    d++;
+                }
+            }
+            if (visible) {
+                const r = el.getBoundingClientRect();
+                if (r.width < 1 || r.height < 1) visible = false;
+            }
+        } catch (_) {
+            visible = true;
+        }
+        visibleCache.set(el, visible);
+        return visible;
+    }
+
+    function cleanText(raw) {
+        return raw.replace(INVISIBLE_CHARS_RE, '').trim();
+    }
+
+    // ============================================================
+    // 类型判断
     // ============================================================
     function getTextType(node) {
-        // 1) 先向上找文档/手册容器，命中视为 UI
         let cur = node.parentElement;
         let d = 0;
         while (cur && d < 30) {
@@ -87,14 +126,11 @@
             cur = cur.parentElement;
             d++;
         }
-
-        // 2) 再判断编辑器特征
         let el = node.parentElement;
         let depth = 0;
         while (el && depth < 30) {
             if (el.tagName === 'TEXTAREA') return 'code';
             if (el.isContentEditable) return 'code';
-
             const cls = typeof el.className === 'string'
                 ? el.className
                 : (el.className && el.className.baseVal) || '';
@@ -102,11 +138,8 @@
                 if (EDITOR_CONTAINER_RE.test(cls)) return 'code';
                 if (TOKEN_CLASS_RE.test(cls) && el.childElementCount === 0) return 'code';
             }
-
             if (el.tagName === 'CODE' || el.tagName === 'PRE') {
-                // CODE / PRE 只有在没有文档容器祖先时才当代码
-                let p = el.parentElement;
-                let d3 = 0;
+                let p = el.parentElement, d3 = 0;
                 while (p && d3 < 10) {
                     const pcls = typeof p.className === 'string'
                         ? p.className
@@ -117,7 +150,6 @@
                 }
                 return 'code';
             }
-
             el = el.parentElement;
             depth++;
         }
@@ -125,9 +157,11 @@
     }
 
     // ============================================================
-    // 提取（只建立内存映射）
+    // 提取
     // ============================================================
     function extractAll() {
+        visibleCache = new WeakMap();
+        lastScanTotal = 0;
         const list = [];
         let textId = 0;
 
@@ -146,11 +180,12 @@
 
         let node;
         while ((node = walker.nextNode())) {
-            const raw = node.textContent;
-            if (!raw) continue;
-            const t = raw.trim();
+            const t = cleanText(node.textContent || '');
             if (!t) continue;
             if (!KOREAN_RE.test(t) && !ENGLISH_RE.test(t)) continue;
+
+            lastScanTotal++;
+            if (!isVisible(node)) continue;
 
             textId++;
             list.push({
@@ -167,22 +202,16 @@
 
     async function extractAndSave() {
         await loadStore();
-        // 如果 pageId 已经由外部（input 手动指定或 doNewPage）设置且与 urlKey 绑定，直接用
         if (!pageId || pageIdMap[urlKey()] !== pageId) {
             await resolvePageId(false);
         }
         annotations = extractAll();
-
         pagesStore[pageId] = {
             url: location.href,
             title: document.title,
             extractedAt: Date.now(),
             texts: annotations.map(a => ({
-                id: a.id,
-                pageId,
-                textId: a.textId,
-                type: a.type,
-                text: a.text
+                id: a.id, pageId, textId: a.textId, type: a.type, text: a.text
             }))
         };
         await saveStore();
@@ -190,18 +219,40 @@
     }
 
     // ============================================================
+    // 矩形工具
+    // ============================================================
+    function getNodeRects(node) {
+        if (!node || !node.isConnected) return [];
+        try {
+            const r = document.createRange();
+            r.selectNodeContents(node);
+            return Array.from(r.getClientRects());
+        } catch (_) { return []; }
+    }
+    function getValidRects(node) {
+        return getNodeRects(node).filter(
+            r => r.width >= MIN_RECT_WIDTH && r.height >= MIN_RECT_HEIGHT
+        );
+    }
+    function getFirstRect(node) {
+        const rs = getValidRects(node);
+        return rs.length ? rs[0] : null;
+    }
+
+    // ============================================================
     // 徽标
     // ============================================================
     function clearBadges() {
-        if (overlayEl) {
-            overlayEl.remove();
-            overlayEl = null;
-        }
+        if (overlayEl) { overlayEl.remove(); overlayEl = null; }
         badgeItems = [];
     }
 
     function renderBadges() {
         clearBadges();
+        // 🔑 如果处于"取消标注"状态，则不渲染
+        if (!badgesVisible) return;
+        if (!annotations.length) return;
+
         overlayEl = document.createElement('div');
         Object.assign(overlayEl.style, {
             position: 'fixed',
@@ -211,9 +262,11 @@
         });
         document.documentElement.appendChild(overlayEl);
 
+        let rendered = 0;
         for (const a of annotations) {
             const rect = getFirstRect(a.node);
             if (!rect) continue;
+
             const badge = document.createElement('div');
             badge.textContent = a.id;
             Object.assign(badge.style, {
@@ -225,14 +278,27 @@
                 borderRadius: '3px',
                 fontFamily: 'monospace',
                 whiteSpace: 'nowrap',
-                pointerEvents: 'none',
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+                userSelect: 'none',
                 transition: 'opacity .15s'
+            });
+            badge.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                highlightNode(a.node);
+                setResult(`已定位：${a.text}`);
             });
             placeBadge(badge, rect);
             overlayEl.appendChild(badge);
             badgeItems.push({ badge, node: a.node, annotation: a });
+            rendered++;
         }
+        console.log(`[Maurice] 徽标渲染 ${rendered}/${annotations.length}`);
 
+        // 避免重复挂监听
+        window.removeEventListener('scroll', repositionBadges, true);
+        window.removeEventListener('resize', repositionBadges);
         window.addEventListener('scroll', repositionBadges, true);
         window.addEventListener('resize', repositionBadges);
     }
@@ -244,41 +310,32 @@
     }
 
     function repositionBadges() {
+        if (!badgesVisible || !overlayEl) return;
         for (const it of badgeItems) {
             const r = getFirstRect(it.node);
-            if (!r) {
-                it.badge.style.display = 'none';
-                continue;
-            }
+            if (!r) { it.badge.style.display = 'none'; continue; }
             it.badge.style.display = '';
             placeBadge(it.badge, r);
         }
     }
 
-    function getNodeRects(node) {
-        if (!node || !node.isConnected) return [];
-        try {
-            const range = document.createRange();
-            range.selectNodeContents(node);
-            return Array.from(range.getClientRects());
-        } catch (_) {
-            return [];
-        }
+    // 🔑 显示 / 隐藏徽标
+    function showBadges() {
+        badgesVisible = true;
+        if (annotations.length) renderBadges();
+        updatePanel();
     }
-
-    function getFirstRect(node) {
-        const r = getNodeRects(node);
-        return r.length ? r[0] : null;
+    function hideBadges() {
+        badgesVisible = false;
+        clearBadges();
+        updatePanel();
     }
 
     // ============================================================
-    // 高亮
+    // 高亮（独立于徽标显隐，永远可用）
     // ============================================================
     function clearHighlight() {
-        if (highlightTimer) {
-            clearTimeout(highlightTimer);
-            highlightTimer = null;
-        }
+        if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
         highlightEls.forEach(el => el.remove());
         highlightEls = [];
         badgeItems.forEach(b => {
@@ -288,7 +345,7 @@
 
     function highlightNode(node) {
         clearHighlight();
-        const rects = getNodeRects(node);
+        const rects = getValidRects(node);
         if (!rects.length) return false;
 
         for (const r of rects) {
@@ -314,6 +371,7 @@
             behavior: 'smooth'
         });
 
+        // 如果有徽标显示，同步变黄；如果已隐藏，跳过
         const item = badgeItems.find(b => b.node === node);
         if (item) item.badge.style.background = '#f59e0b';
 
@@ -330,38 +388,26 @@
         const targetPage = m[1].toUpperCase();
         const targetTid = parseInt(m[2], 10);
 
-        // 当前页：优先用内存映射
         if (targetPage === pageId) {
             if (!annotations.length) annotations = extractAll();
             const a = annotations.find(x => x.textId === targetTid);
             if (!a) return { ok: false, msg: `当前页 (${pageId}) 没有编号 ${targetTid}` };
-            highlightNode(a.node);
-            return { ok: true, type: 'current', msg: `已定位：${a.text}` };
-        }
-
-        // 其他页：查 storage
-        await loadStore();
-        const pg = pagesStore[targetPage];
-        if (!pg) {
+            const ok = highlightNode(a.node);
             return {
-                ok: false,
-                msg: `还没有记录页面 ${targetPage}，请先去那页按 F1 提取`
+                ok,
+                type: 'current',
+                msg: ok ? `已定位：${a.text}` : `找到了 ${a.id}，但当前视口中没有有效几何位置`
             };
         }
+
+        await loadStore();
+        const pg = pagesStore[targetPage];
+        if (!pg) return { ok: false, msg: `还没有记录页面 ${targetPage}，请先去那页按 F1 提取` };
         const entry = pg.texts.find(t => t.textId === targetTid);
-        if (!entry) {
-            return { ok: false, msg: `页面 ${targetPage} 没有编号 ${targetTid}` };
-        }
+        if (!entry) return { ok: false, msg: `页面 ${targetPage} 没有编号 ${targetTid}` };
         return {
-            ok: true,
-            type: 'other',
-            msg:
-                `该词不在当前页。\n` +
-                `页面：${targetPage}\n` +
-                `标题：${pg.title || '(无)'}\n` +
-                `URL：${pg.url}\n` +
-                `原文：${entry.text}\n` +
-                `请切换到该页面后按 F1 重新提取`
+            ok: true, type: 'other',
+            msg: `该词不在当前页。\n页面：${targetPage}\n标题：${pg.title || '(无)'}\nURL：${pg.url}\n原文：${entry.text}\n请切换到该页面后按 F1 重新提取`
         };
     }
 
@@ -372,23 +418,12 @@
         if (panelEl) return panelEl;
         panelEl = document.createElement('div');
         Object.assign(panelEl.style, {
-            position: 'fixed',
-            right: '16px',
-            top: '16px',
-            width: '440px',
-            maxHeight: '84vh',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            background: '#1e1e1e',
-            color: '#eee',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: '12px',
-            border: '1px solid #444',
-            borderRadius: '8px',
-            padding: '12px',
-            zIndex: '2147483647',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.5)'
+            position: 'fixed', right: '16px', top: '16px', width: '460px', maxHeight: '86vh',
+            overflow: 'hidden', display: 'flex', flexDirection: 'column',
+            background: '#1e1e1e', color: '#eee',
+            fontFamily: 'system-ui, sans-serif', fontSize: '12px',
+            border: '1px solid #444', borderRadius: '8px', padding: '12px',
+            zIndex: '2147483647', boxShadow: '0 4px 24px rgba(0,0,0,0.5)'
         });
 
         panelEl.innerHTML = `
@@ -407,7 +442,12 @@
       </div>
 
       <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <input data-el="q" placeholder="输入编号查找，例如 P8-42" style="flex:1;background:#111;border:1px solid #444;color:#eee;padding:6px 8px;border-radius:4px;font-family:monospace;" />
+        <button data-act="show-badges" style="flex:1;padding:6px;background:#8b5cf6;color:#fff;border:none;border-radius:4px;cursor:pointer;">显示标注</button>
+        <button data-act="hide-badges" style="flex:1;padding:6px;background:#4b5563;color:#fff;border:none;border-radius:4px;cursor:pointer;">取消标注</button>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input data-el="q" placeholder="输入编号查找，例如 P1-42" style="flex:1;background:#111;border:1px solid #444;color:#eee;padding:6px 8px;border-radius:4px;font-family:monospace;" />
         <button data-act="find" style="padding:6px 12px;background:#10b981;color:#fff;border:none;border-radius:4px;cursor:pointer;">查找</button>
       </div>
 
@@ -417,7 +457,6 @@
         <span style="color:#aaa;font-size:11px;">已提取页面</span>
         <button data-act="refresh" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;">刷新</button>
       </div>
-
       <div data-el="pages" style="max-height:180px;overflow:auto;background:#111;border-radius:4px;padding:6px;font-family:monospace;font-size:11px;line-height:1.6;margin-bottom:8px;"></div>
 
       <div style="display:flex;gap:6px;">
@@ -435,6 +474,8 @@
             if (act === 'close') hidePanel();
             else if (act === 'extract') await doExtract();
             else if (act === 'newpage') await doNewPage();
+            else if (act === 'show-badges') showBadges();
+            else if (act === 'hide-badges') hideBadges();
             else if (act === 'find') await doFind();
             else if (act === 'refresh') await refreshPages();
             else if (act === 'export-json') await exportAll('json');
@@ -442,10 +483,7 @@
         });
 
         panelEl.querySelector('[data-el="q"]').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                doFind();
-            }
+            if (e.key === 'Enter') { e.preventDefault(); doFind(); }
         });
 
         return panelEl;
@@ -456,8 +494,6 @@
         const userPid = pidInput.value.trim().toUpperCase();
 
         await loadStore();
-
-        // 用户手动在输入框指定了页面号，则以此为准
         if (userPid && /^P\d+$/.test(userPid)) {
             pageId = userPid;
             pageIdMap[urlKey()] = pageId;
@@ -469,9 +505,15 @@
         }
 
         await extractAndSave();
-        renderBadges();
+        renderBadges();   // 内部会检查 badgesVisible
         updatePanel();
-        setResult(`✅ 已提取 ${annotations.length} 条并存入 ${pageId}`);
+
+        const hidden = lastScanTotal - annotations.length;
+        setResult(
+            `✅ 已提取 ${annotations.length} 条可见文本并存入 ${pageId}\n` +
+            `（DOM 中命中 ${lastScanTotal} 条，过滤隐藏/空壳 ${hidden} 条）\n` +
+            `当前徽标：${badgesVisible ? '显示中' : '已隐藏（可点"显示标注"恢复）'}`
+        );
     }
 
     async function doNewPage() {
@@ -491,19 +533,18 @@
     }
 
     function setResult(text) {
+        if (!panelEl) return;
         panelEl.querySelector('[data-el="result"]').textContent = text;
     }
 
     async function refreshPages() {
         await loadStore();
         const el = panelEl.querySelector('[data-el="pages"]');
+        if (!el) return;
         const ids = Object.keys(pagesStore).sort(
             (a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10)
         );
-        if (!ids.length) {
-            el.textContent = '（暂无）';
-            return;
-        }
+        if (!ids.length) { el.textContent = '（暂无）'; return; }
         el.innerHTML = ids.map(id => {
             const p = pagesStore[id];
             const cur = id === pageId ? ' ←当前' : '';
@@ -526,49 +567,53 @@
         const ids = Object.keys(pagesStore).sort(
             (a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10)
         );
-
         let content, filename, mime;
         if (kind === 'json') {
             const data = [];
-            for (const id of ids) {
-                for (const t of pagesStore[id].texts) {
-                    data.push({
-                        id: t.id,
-                        pageId: t.pageId,
-                        textId: t.textId,
-                        type: t.type,
-                        text: t.text,
-                        translation: ''
-                    });
-                }
+            for (const id of ids) for (const t of pagesStore[id].texts) {
+                data.push({
+                    id: t.id, pageId: t.pageId, textId: t.textId,
+                    type: t.type, text: t.text, translation: ''
+                });
             }
             content = JSON.stringify(data, null, 2);
             filename = 'maurice_all.json';
             mime = 'application/json';
         } else {
             const lines = ['id\ttype\ttext'];
-            for (const id of ids) {
-                for (const t of pagesStore[id].texts) {
-                    lines.push(`${t.id}\t${t.type}\t${t.text.replace(/\t/g, ' ')}`);
-                }
+            for (const id of ids) for (const t of pagesStore[id].texts) {
+                lines.push(`${t.id}\t${t.type}\t${t.text.replace(/\t/g, ' ')}`);
             }
             content = lines.join('\n');
             filename = 'maurice_all.tsv';
             mime = 'text/tab-separated-values';
         }
-
         const blob = new Blob([content], { type: mime + ';charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
+        a.href = url; a.download = filename; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 3000);
     }
 
     function updatePanel() {
         if (!panelEl) return;
         panelEl.querySelector('[data-el="pid"]').value = pageId || '';
+        // 根据当前状态给按钮上/下色，让用户知道处于哪一档
+        const showBtn = panelEl.querySelector('[data-act="show-badges"]');
+        const hideBtn = panelEl.querySelector('[data-act="hide-badges"]');
+        if (showBtn && hideBtn) {
+            if (badgesVisible) {
+                showBtn.style.background = '#8b5cf6';
+                showBtn.style.opacity = '0.55';
+                hideBtn.style.background = '#4b5563';
+                hideBtn.style.opacity = '1';
+            } else {
+                showBtn.style.background = '#8b5cf6';
+                showBtn.style.opacity = '1';
+                hideBtn.style.background = '#4b5563';
+                hideBtn.style.opacity = '0.55';
+            }
+        }
         refreshPages();
     }
 
@@ -578,12 +623,10 @@
         panelVisible = true;
         updatePanel();
     }
-
     function hidePanel() {
         if (panelEl) panelEl.style.display = 'none';
         panelVisible = false;
     }
-
     function togglePanel() {
         panelVisible ? hidePanel() : showPanel();
     }
@@ -611,7 +654,7 @@
         await resolvePageId(false);
         annotations = extractAll();
         console.log(
-            `[Maurice] 已加载，当前页 ${pageId}，DOM 中识别 ${annotations.length} 条`
+            `[Maurice] 已加载，当前页 ${pageId}，可见文本 ${annotations.length} 条 / DOM 命中 ${lastScanTotal} 条`
         );
     })();
 })();
