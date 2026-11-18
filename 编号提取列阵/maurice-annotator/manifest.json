@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Maurice 文本标注与汉化",
-  "version": "3.0",
-  "description": "标注、查找、翻译并替换页面 UI 文本；代码区域保持原样",
+  "name": "Maurice 标注 / 汉化",
+  "version": "3.5",
+  "description": "按 F1 标注文本，支持隐藏文本提取、动态数字替换和词库管理",
   "permissions": [ "activeTab", "scripting", "downloads", "storage" ],
   "host_permissions": [ "https://lell1203.github.io/*" ],
-  "action": { "default_title": "Maurice 工具（F1）" },
+  "action": { "default_title": "按 F1 打开面板" },
   "content_scripts": [
     {
       "matches": [ "https://lell1203.github.io/*" ],
