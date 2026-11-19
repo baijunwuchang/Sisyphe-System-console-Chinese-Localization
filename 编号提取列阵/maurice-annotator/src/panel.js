@@ -1,0 +1,273 @@
+/**
+ * 面板视图：建 DOM、绑事件、把动作转发给应用层。
+ *
+ * 这里是唯一知道“按钮长什么样、点了调哪个方法”的地方；
+ * 业务逻辑（提取 / 词库 / 导出）全部通过 app 注入。
+ */
+(function registerPanel(global) {
+    'use strict';
+
+    /**
+     * @param {object} deps
+     * @param {object} deps.app
+     * @param {object} deps.constants
+     * @param {object} deps.html
+     * @param {Function} deps.template
+     */
+    function createPanel({ app, constants, html, template }) {
+        let panelEl = null;
+        let visible = false;
+
+        function query(selector) {
+            return panelEl ? panelEl.querySelector(selector) : null;
+        }
+
+        function build() {
+            if (panelEl) return panelEl;
+
+            panelEl = document.createElement('div');
+            Object.assign(panelEl.style, {
+                position: 'fixed',
+                right: '16px',
+                top: '16px',
+                width: constants.PANEL_WIDTH_PX + 'px',
+                maxHeight: '90vh',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                background: '#1e1e1e',
+                color: '#eee',
+                fontFamily: 'system-ui, sans-serif',
+                fontSize: '12px',
+                border: '1px solid #444',
+                borderRadius: '8px',
+                padding: '12px',
+                zIndex: constants.PANEL_Z_INDEX,
+                boxShadow: '0 4px 24px rgba(0,0,0,0.5)'
+            });
+            panelEl.innerHTML = template({ constants });
+            document.documentElement.appendChild(panelEl);
+
+            bindEvents();
+            return panelEl;
+        }
+
+        /** 统一捕获动作异常，避免面板静默 */
+        async function run(action) {
+            try {
+                const message = await action();
+                if (message) setResult(message);
+            } catch (error) {
+                setResult('出错：' + (error && error.message ? error.message : String(error)));
+            }
+            update();
+        }
+
+        async function doFind() {
+            const queryInput = query('[data-el="q"]');
+            const result = await app.find(queryInput.value);
+            if (result.source !== undefined) {
+                query('[data-el="src"]').value = result.source;
+                query('[data-el="dst"]').value = result.translation || '';
+            }
+            setResult(result.message);
+            update();
+        }
+
+        function bindEvents() {
+            panelEl.addEventListener('click', (event) => {
+                const exportButton = event.target.closest('[data-dict-export]');
+                if (exportButton) {
+                    run(() => app.exportDict(exportButton.dataset.dictExport));
+                    return;
+                }
+
+                const deleteButton = event.target.closest('[data-dict-del]');
+                if (deleteButton) {
+                    const name = deleteButton.dataset.dictDel;
+                    if (confirm(`确定把词库「${name}」删了？`)) {
+                        run(() => app.deleteDict(name));
+                    }
+                    return;
+                }
+
+                const button = event.target.closest('button');
+                if (!button) return;
+                const action = button.dataset.act;
+
+                switch (action) {
+                    case 'close':
+                        hide();
+                        break;
+                    case 'extract':
+                        run(() => app.extract());
+                        break;
+                    case 'show-badges':
+                        app.setBadgesVisible(true);
+                        update();
+                        break;
+                    case 'hide-badges':
+                        app.setBadgesVisible(false);
+                        update();
+                        break;
+                    case 'apply-all':
+                        run(() => app.applyAll());
+                        break;
+                    case 'find':
+                        run(doFind);
+                        break;
+                    case 'save-global':
+                        run(() =>
+                            app.saveTranslation({
+                                source: query('[data-el="src"]').value,
+                                target: query('[data-el="dst"]').value,
+                                scope: 'global'
+                            })
+                        );
+                        break;
+                    case 'save-page':
+                        run(() =>
+                            app.saveTranslation({
+                                source: query('[data-el="src"]').value,
+                                target: query('[data-el="dst"]').value,
+                                scope: 'page'
+                            })
+                        );
+                        break;
+                    case 'del-trans':
+                        run(() => app.deleteTranslation(query('[data-el="src"]').value));
+                        break;
+                    case 'import-dict':
+                        query('[data-el="file"]').click();
+                        break;
+                    case 'export-all-dicts':
+                        run(() => app.exportMerged());
+                        break;
+                    case 'export-pending':
+                        run(() => app.exportPending());
+                        break;
+                    case 'export-json':
+                        run(() => app.exportAll('json'));
+                        break;
+                    case 'export-tsv':
+                        run(() => app.exportAll('tsv'));
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+            panelEl.addEventListener('change', (event) => {
+                const checkbox = event.target.closest('[data-dict-toggle]');
+                if (!checkbox) return;
+                run(() => app.toggleDict(checkbox.dataset.dictToggle, checkbox.checked));
+            });
+
+            const fileInput = panelEl.querySelector('[data-el="file"]');
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+                run(() => app.importFile(file)).finally(() => {
+                    event.target.value = '';
+                });
+            });
+
+            const queryInput = panelEl.querySelector('[data-el="q"]');
+            queryInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    run(doFind);
+                }
+            });
+
+            const targetInput = panelEl.querySelector('[data-el="dst"]');
+            targetInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    run(() =>
+                        app.saveTranslation({
+                            source: query('[data-el="src"]').value,
+                            target: query('[data-el="dst"]').value,
+                            scope: 'global'
+                        })
+                    );
+                }
+            });
+        }
+
+        function renderDictList() {
+            const container = query('[data-el="dicts"]');
+            if (!container) return;
+
+            const dicts = app.getDicts();
+            if (!dicts.length) {
+                container.textContent = '（没词库）';
+                return;
+            }
+
+            container.innerHTML = dicts
+                .map((dict) => {
+                    const checked = dict.active ? 'checked' : '';
+                    const title = html.escapeAttr(dict.description || dict.label);
+                    const description = dict.description
+                        ? `<span style="color:#666;"> · ${html.escapeHtml(dict.description)}</span>`
+                        : '';
+                    const deleteButton = dict.deletable
+                        ? `<button data-dict-del="${html.escapeAttr(dict.name)}" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:10px;">删除</button>`
+                        : '';
+
+                    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #2a2a2a;">
+        <input type="checkbox" data-dict-toggle="${html.escapeAttr(dict.name)}" ${checked} style="cursor:pointer;" />
+        <span style="flex:1;color:#eee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${title}">
+          ${html.escapeHtml(dict.label)}${description}
+        </span>
+        <span style="color:#f59e0b;font-size:10px;white-space:nowrap;">${dict.count}词</span>
+        <button data-dict-export="${html.escapeAttr(dict.name)}" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:10px;">导出</button>
+        ${deleteButton}
+      </div>`;
+                })
+                .join('');
+        }
+
+        function update() {
+            if (!panelEl) return;
+
+            const showButton = query('[data-act="show-badges"]');
+            const hideButton = query('[data-act="hide-badges"]');
+            if (showButton && hideButton) {
+                const badgesVisible = app.isBadgesVisible();
+                showButton.style.opacity = badgesVisible ? '0.55' : '1';
+                hideButton.style.opacity = badgesVisible ? '1' : '0.55';
+            }
+
+            renderDictList();
+        }
+
+        function setResult(text) {
+            const result = query('[data-el="result"]');
+            if (result) result.textContent = text;
+        }
+
+        function show() {
+            build();
+            panelEl.style.display = 'flex';
+            visible = true;
+            update();
+        }
+
+        function hide() {
+            if (panelEl) panelEl.style.display = 'none';
+            visible = false;
+        }
+
+        function toggle() {
+            if (visible) hide();
+            else show();
+        }
+
+        return { show, hide, toggle, update, setResult };
+    }
+
+    global.Maurice = global.Maurice || {};
+    global.Maurice.createPanel = createPanel;
+})(globalThis);

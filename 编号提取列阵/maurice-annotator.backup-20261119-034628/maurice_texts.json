@@ -1,0 +1,1266 @@
+[
+  {
+    "id": "P1-1",
+    "pageId": "P1",
+    "textId": 1,
+    "type": "ui",
+    "text": "파일",
+    "translation": ""
+  },
+  {
+    "id": "P1-2",
+    "pageId": "P1",
+    "textId": 2,
+    "type": "ui",
+    "text": "편집",
+    "translation": ""
+  },
+  {
+    "id": "P1-3",
+    "pageId": "P1",
+    "textId": 3,
+    "type": "ui",
+    "text": "보기",
+    "translation": ""
+  },
+  {
+    "id": "P1-4",
+    "pageId": "P1",
+    "textId": 4,
+    "type": "ui",
+    "text": "실행",
+    "translation": ""
+  },
+  {
+    "id": "P1-5",
+    "pageId": "P1",
+    "textId": 5,
+    "type": "ui",
+    "text": "터미널",
+    "translation": ""
+  },
+  {
+    "id": "P1-6",
+    "pageId": "P1",
+    "textId": 6,
+    "type": "ui",
+    "text": "lenoir_1f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-7",
+    "pageId": "P1",
+    "textId": 7,
+    "type": "ui",
+    "text": "Sisyphe Studio",
+    "translation": ""
+  },
+  {
+    "id": "P1-8",
+    "pageId": "P1",
+    "textId": 8,
+    "type": "ui",
+    "text": "· 르누아르 담당 관리자 콘솔",
+    "translation": ""
+  },
+  {
+    "id": "P1-9",
+    "pageId": "P1",
+    "textId": 9,
+    "type": "ui",
+    "text": "⏏ 콘솔 메인",
+    "translation": ""
+  },
+  {
+    "id": "P1-10",
+    "pageId": "P1",
+    "textId": 10,
+    "type": "ui",
+    "text": "층 · 계시와 유지",
+    "translation": ""
+  },
+  {
+    "id": "P1-11",
+    "pageId": "P1",
+    "textId": 11,
+    "type": "ui",
+    "text": "신앙",
+    "translation": ""
+  },
+  {
+    "id": "P1-12",
+    "pageId": "P1",
+    "textId": 12,
+    "type": "ui",
+    "text": "warden_judgement.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-13",
+    "pageId": "P1",
+    "textId": 13,
+    "type": "ui",
+    "text": "7F",
+    "translation": ""
+  },
+  {
+    "id": "P1-14",
+    "pageId": "P1",
+    "textId": 14,
+    "type": "ui",
+    "text": "시스템 유지 전용",
+    "translation": ""
+  },
+  {
+    "id": "P1-15",
+    "pageId": "P1",
+    "textId": 15,
+    "type": "ui",
+    "text": "유지",
+    "translation": ""
+  },
+  {
+    "id": "P1-16",
+    "pageId": "P1",
+    "textId": 16,
+    "type": "ui",
+    "text": "6F",
+    "translation": ""
+  },
+  {
+    "id": "P1-17",
+    "pageId": "P1",
+    "textId": 17,
+    "type": "ui",
+    "text": "lenoir_6f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-18",
+    "pageId": "P1",
+    "textId": 18,
+    "type": "ui",
+    "text": "5F",
+    "translation": ""
+  },
+  {
+    "id": "P1-19",
+    "pageId": "P1",
+    "textId": 19,
+    "type": "ui",
+    "text": "lenoir_5f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-20",
+    "pageId": "P1",
+    "textId": 20,
+    "type": "ui",
+    "text": "4F",
+    "translation": ""
+  },
+  {
+    "id": "P1-21",
+    "pageId": "P1",
+    "textId": 21,
+    "type": "ui",
+    "text": "lenoir_4f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-22",
+    "pageId": "P1",
+    "textId": 22,
+    "type": "ui",
+    "text": "3F",
+    "translation": ""
+  },
+  {
+    "id": "P1-23",
+    "pageId": "P1",
+    "textId": 23,
+    "type": "ui",
+    "text": "lenoir_3f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-24",
+    "pageId": "P1",
+    "textId": 24,
+    "type": "ui",
+    "text": "2F",
+    "translation": ""
+  },
+  {
+    "id": "P1-25",
+    "pageId": "P1",
+    "textId": 25,
+    "type": "ui",
+    "text": "lenoir_2f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-26",
+    "pageId": "P1",
+    "textId": 26,
+    "type": "ui",
+    "text": "1F",
+    "translation": ""
+  },
+  {
+    "id": "P1-27",
+    "pageId": "P1",
+    "textId": 27,
+    "type": "ui",
+    "text": "lenoir_1f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-28",
+    "pageId": "P1",
+    "textId": 28,
+    "type": "ui",
+    "text": "B1",
+    "translation": ""
+  },
+  {
+    "id": "P1-29",
+    "pageId": "P1",
+    "textId": 29,
+    "type": "ui",
+    "text": "lenoir_b1.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-30",
+    "pageId": "P1",
+    "textId": 30,
+    "type": "ui",
+    "text": "B2",
+    "translation": ""
+  },
+  {
+    "id": "P1-31",
+    "pageId": "P1",
+    "textId": 31,
+    "type": "ui",
+    "text": "시스템 유지 전용",
+    "translation": ""
+  },
+  {
+    "id": "P1-32",
+    "pageId": "P1",
+    "textId": 32,
+    "type": "ui",
+    "text": "유지",
+    "translation": ""
+  },
+  {
+    "id": "P1-33",
+    "pageId": "P1",
+    "textId": 33,
+    "type": "ui",
+    "text": "B3",
+    "translation": ""
+  },
+  {
+    "id": "P1-34",
+    "pageId": "P1",
+    "textId": 34,
+    "type": "ui",
+    "text": "시스템 유지 전용",
+    "translation": ""
+  },
+  {
+    "id": "P1-35",
+    "pageId": "P1",
+    "textId": 35,
+    "type": "ui",
+    "text": "유지",
+    "translation": ""
+  },
+  {
+    "id": "P1-36",
+    "pageId": "P1",
+    "textId": 36,
+    "type": "ui",
+    "text": "전체 콘솔",
+    "translation": ""
+  },
+  {
+    "id": "P1-37",
+    "pageId": "P1",
+    "textId": 37,
+    "type": "ui",
+    "text": "ALL",
+    "translation": ""
+  },
+  {
+    "id": "P1-38",
+    "pageId": "P1",
+    "textId": 38,
+    "type": "ui",
+    "text": "all_lenoir.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-39",
+    "pageId": "P1",
+    "textId": 39,
+    "type": "ui",
+    "text": "간수 아바타 · 운명 이탈",
+    "translation": ""
+  },
+  {
+    "id": "P1-40",
+    "pageId": "P1",
+    "textId": 40,
+    "type": "ui",
+    "text": "AV",
+    "translation": ""
+  },
+  {
+    "id": "P1-41",
+    "pageId": "P1",
+    "textId": 41,
+    "type": "ui",
+    "text": "warden_avatar.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-42",
+    "pageId": "P1",
+    "textId": 42,
+    "type": "ui",
+    "text": "시스템 유지",
+    "translation": ""
+  },
+  {
+    "id": "P1-43",
+    "pageId": "P1",
+    "textId": 43,
+    "type": "ui",
+    "text": "정상 가동 중",
+    "translation": ""
+  },
+  {
+    "id": "P1-44",
+    "pageId": "P1",
+    "textId": 44,
+    "type": "ui",
+    "text": "전체 재고 정리",
+    "translation": ""
+  },
+  {
+    "id": "P1-45",
+    "pageId": "P1",
+    "textId": 45,
+    "type": "ui",
+    "text": "남은 1회",
+    "translation": ""
+  },
+  {
+    "id": "P1-46",
+    "pageId": "P1",
+    "textId": 46,
+    "type": "ui",
+    "text": "소각",
+    "translation": ""
+  },
+  {
+    "id": "P1-47",
+    "pageId": "P1",
+    "textId": 47,
+    "type": "ui",
+    "text": "게임 끝내기",
+    "translation": ""
+  },
+  {
+    "id": "P1-48",
+    "pageId": "P1",
+    "textId": 48,
+    "type": "ui",
+    "text": "층 정보",
+    "translation": ""
+  },
+  {
+    "id": "P1-49",
+    "pageId": "P1",
+    "textId": 49,
+    "type": "ui",
+    "text": "1F · 뷰티·컨템포러리관",
+    "translation": ""
+  },
+  {
+    "id": "P1-50",
+    "pageId": "P1",
+    "textId": 50,
+    "type": "ui",
+    "text": "유행이 하루에도 몇 번씩 뒤집힌다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-51",
+    "pageId": "P1",
+    "textId": 51,
+    "type": "ui",
+    "text": "르루주가 르누아르의 컨템포러리관을 넘본다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-52",
+    "pageId": "P1",
+    "textId": 52,
+    "type": "ui",
+    "text": "떨어진 것들을 주워 가는 자들은 검은 천 조각을 걸치고 다니기도 한다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-53",
+    "pageId": "P1",
+    "textId": 53,
+    "type": "ui",
+    "text": "lenoir_1f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-54",
+    "pageId": "P1",
+    "textId": 54,
+    "type": "ui",
+    "text": "md",
+    "translation": ""
+  },
+  {
+    "id": "P1-55",
+    "pageId": "P1",
+    "textId": 55,
+    "type": "ui",
+    "text": "콘솔_매뉴얼.md",
+    "translation": ""
+  },
+  {
+    "id": "P1-56",
+    "pageId": "P1",
+    "textId": 56,
+    "type": "ui",
+    "text": "목소리",
+    "translation": ""
+  },
+  {
+    "id": "P1-57",
+    "pageId": "P1",
+    "textId": 57,
+    "type": "ui",
+    "text": "▶ 목소리 재생",
+    "translation": ""
+  },
+  {
+    "id": "P1-58",
+    "pageId": "P1",
+    "textId": 58,
+    "type": "ui",
+    "text": "음성",
+    "translation": ""
+  },
+  {
+    "id": "P1-59",
+    "pageId": "P1",
+    "textId": 59,
+    "type": "ui",
+    "text": "행동 명령",
+    "translation": ""
+  },
+  {
+    "id": "P1-60",
+    "pageId": "P1",
+    "textId": 60,
+    "type": "ui",
+    "text": "./run_command",
+    "translation": ""
+  },
+  {
+    "id": "P1-61",
+    "pageId": "P1",
+    "textId": 61,
+    "type": "ui",
+    "text": "초기화",
+    "translation": ""
+  },
+  {
+    "id": "P1-62",
+    "pageId": "P1",
+    "textId": 62,
+    "type": "ui",
+    "text": "신앙",
+    "translation": ""
+  },
+  {
+    "id": "P1-63",
+    "pageId": "P1",
+    "textId": 63,
+    "type": "ui",
+    "text": "· 명령을 기다리는 르누아르 없음",
+    "translation": ""
+  },
+  {
+    "id": "P1-64",
+    "pageId": "P1",
+    "textId": 64,
+    "type": "ui",
+    "text": "lenoir-console",
+    "translation": ""
+  },
+  {
+    "id": "P1-65",
+    "pageId": "P1",
+    "textId": 65,
+    "type": "ui",
+    "text": "revelation",
+    "translation": ""
+  },
+  {
+    "id": "P1-66",
+    "pageId": "P1",
+    "textId": 66,
+    "type": "ui",
+    "text": "1F",
+    "translation": ""
+  },
+  {
+    "id": "P1-67",
+    "pageId": "P1",
+    "textId": 67,
+    "type": "ui",
+    "text": "lenoir_1f.nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-68",
+    "pageId": "P1",
+    "textId": 68,
+    "type": "ui",
+    "text": "// lenoir_1f.nail · 컨템포러리관의 르누아르",
+    "translation": ""
+  },
+  {
+    "id": "P1-69",
+    "pageId": "P1",
+    "textId": 69,
+    "type": "ui",
+    "text": "// ── 권한 확인: 등록 진영만 본다 ──",
+    "translation": ""
+  },
+  {
+    "id": "P1-70",
+    "pageId": "P1",
+    "textId": 70,
+    "type": "ui",
+    "text": "if",
+    "translation": ""
+  },
+  {
+    "id": "P1-71",
+    "pageId": "P1",
+    "textId": 71,
+    "type": "ui",
+    "text": "customer",
+    "translation": ""
+  },
+  {
+    "id": "P1-72",
+    "pageId": "P1",
+    "textId": 72,
+    "type": "ui",
+    "text": "return",
+    "translation": ""
+  },
+  {
+    "id": "P1-73",
+    "pageId": "P1",
+    "textId": 73,
+    "type": "ui",
+    "text": "// ── 상태 이상 ──",
+    "translation": ""
+  },
+  {
+    "id": "P1-74",
+    "pageId": "P1",
+    "textId": 74,
+    "type": "ui",
+    "text": "// ── 유행: '지금' 유행 기준 ──",
+    "translation": ""
+  },
+  {
+    "id": "P1-75",
+    "pageId": "P1",
+    "textId": 75,
+    "type": "ui",
+    "text": "// ── 르루주 축출 계시: 르루주들을 몰아내라 ──",
+    "translation": ""
+  },
+  {
+    "id": "P1-76",
+    "pageId": "P1",
+    "textId": 76,
+    "type": "ui",
+    "text": "if",
+    "translation": ""
+  },
+  {
+    "id": "P1-77",
+    "pageId": "P1",
+    "textId": 77,
+    "type": "ui",
+    "text": "return",
+    "translation": ""
+  },
+  {
+    "id": "P1-78",
+    "pageId": "P1",
+    "textId": 78,
+    "type": "ui",
+    "text": "+ 새 줄 추가",
+    "translation": ""
+  },
+  {
+    "id": "P1-79",
+    "pageId": "P1",
+    "textId": 79,
+    "type": "ui",
+    "text": "줄 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-80",
+    "pageId": "P1",
+    "textId": 80,
+    "type": "ui",
+    "text": "칸 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-81",
+    "pageId": "P1",
+    "textId": 81,
+    "type": "ui",
+    "text": "Space",
+    "translation": ""
+  },
+  {
+    "id": "P1-82",
+    "pageId": "P1",
+    "textId": 82,
+    "type": "ui",
+    "text": "목록 열기 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-83",
+    "pageId": "P1",
+    "textId": 83,
+    "type": "ui",
+    "text": "Alt",
+    "translation": ""
+  },
+  {
+    "id": "P1-84",
+    "pageId": "P1",
+    "textId": 84,
+    "type": "ui",
+    "text": "줄 옮기기 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-85",
+    "pageId": "P1",
+    "textId": 85,
+    "type": "ui",
+    "text": "Ctrl",
+    "translation": ""
+  },
+  {
+    "id": "P1-86",
+    "pageId": "P1",
+    "textId": 86,
+    "type": "ui",
+    "text": "Shift",
+    "translation": ""
+  },
+  {
+    "id": "P1-87",
+    "pageId": "P1",
+    "textId": 87,
+    "type": "ui",
+    "text": "K",
+    "translation": ""
+  },
+  {
+    "id": "P1-88",
+    "pageId": "P1",
+    "textId": 88,
+    "type": "ui",
+    "text": "줄 삭제 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-89",
+    "pageId": "P1",
+    "textId": 89,
+    "type": "ui",
+    "text": "Ctrl",
+    "translation": ""
+  },
+  {
+    "id": "P1-90",
+    "pageId": "P1",
+    "textId": 90,
+    "type": "ui",
+    "text": "Shift",
+    "translation": ""
+  },
+  {
+    "id": "P1-91",
+    "pageId": "P1",
+    "textId": 91,
+    "type": "ui",
+    "text": "아래에 새 줄 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-92",
+    "pageId": "P1",
+    "textId": 92,
+    "type": "ui",
+    "text": "Ctrl",
+    "translation": ""
+  },
+  {
+    "id": "P1-93",
+    "pageId": "P1",
+    "textId": 93,
+    "type": "ui",
+    "text": "Shift",
+    "translation": ""
+  },
+  {
+    "id": "P1-94",
+    "pageId": "P1",
+    "textId": 94,
+    "type": "ui",
+    "text": "D",
+    "translation": ""
+  },
+  {
+    "id": "P1-95",
+    "pageId": "P1",
+    "textId": 95,
+    "type": "ui",
+    "text": "줄 복제 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-96",
+    "pageId": "P1",
+    "textId": 96,
+    "type": "ui",
+    "text": "Ctrl",
+    "translation": ""
+  },
+  {
+    "id": "P1-97",
+    "pageId": "P1",
+    "textId": 97,
+    "type": "ui",
+    "text": "Z",
+    "translation": ""
+  },
+  {
+    "id": "P1-98",
+    "pageId": "P1",
+    "textId": 98,
+    "type": "ui",
+    "text": "Y",
+    "translation": ""
+  },
+  {
+    "id": "P1-99",
+    "pageId": "P1",
+    "textId": 99,
+    "type": "ui",
+    "text": "되돌리기 · 다시 ·",
+    "translation": ""
+  },
+  {
+    "id": "P1-100",
+    "pageId": "P1",
+    "textId": 100,
+    "type": "ui",
+    "text": "Ctrl",
+    "translation": ""
+  },
+  {
+    "id": "P1-101",
+    "pageId": "P1",
+    "textId": 101,
+    "type": "ui",
+    "text": "실행",
+    "translation": ""
+  },
+  {
+    "id": "P1-102",
+    "pageId": "P1",
+    "textId": 102,
+    "type": "ui",
+    "text": "터미널",
+    "translation": ""
+  },
+  {
+    "id": "P1-103",
+    "pageId": "P1",
+    "textId": 103,
+    "type": "ui",
+    "text": "문제",
+    "translation": ""
+  },
+  {
+    "id": "P1-104",
+    "pageId": "P1",
+    "textId": 104,
+    "type": "ui",
+    "text": "테스트",
+    "translation": ""
+  },
+  {
+    "id": "P1-105",
+    "pageId": "P1",
+    "textId": 105,
+    "type": "ui",
+    "text": "[09:00] SYS   1일차 출근. 르누아르 담당 관리자 콘솔에 접속했다. (1× = 실제 1초에 근무 1분)",
+    "translation": ""
+  },
+  {
+    "id": "P1-106",
+    "pageId": "P1",
+    "textId": 106,
+    "type": "ui",
+    "text": "1회차 시나리오 · 시스템 보존 70/100 · 흠 없는 계시와 판결, 수리로 보존이 오른다. 100에 닿으면 시나리오가 완결된다",
+    "translation": ""
+  },
+  {
+    "id": "P1-107",
+    "pageId": "P1",
+    "textId": 107,
+    "type": "ui",
+    "text": "계시: 1F~5F에는 목소리와 행동 명령, B1 · 6F · ???에는 행동 명령만 내린다. 전체 콘솔(ALL)은 모든 르누아르에게 먼저 적용된다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-108",
+    "pageId": "P1",
+    "textId": 108,
+    "type": "ui",
+    "text": "B3 · B2 · 7F에는 르누아르의 매장이 없다. 시스템 유지만 한다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-109",
+    "pageId": "P1",
+    "textId": 109,
+    "type": "ui",
+    "text": "시스템 유지: 오류가 나면 .sys 파일을 고친다. 하루 한 번, 전체 재고 정리로 기억 영역 오류를 한꺼번에 지울 수 있다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-110",
+    "pageId": "P1",
+    "textId": 110,
+    "type": "ui",
+    "text": "간수 아바타: 운명 이탈이 감지되면 warden_avatar.nail로 판결할 간수를 출격시킨다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-111",
+    "pageId": "P1",
+    "textId": 111,
+    "type": "ui",
+    "text": "sisyphe@lenoir-1F",
+    "translation": ""
+  },
+  {
+    "id": "P1-112",
+    "pageId": "P1",
+    "textId": 112,
+    "type": "ui",
+    "text": "일차",
+    "translation": ""
+  },
+  {
+    "id": "P1-113",
+    "pageId": "P1",
+    "textId": 113,
+    "type": "ui",
+    "text": "회차",
+    "translation": ""
+  },
+  {
+    "id": "P1-114",
+    "pageId": "P1",
+    "textId": 114,
+    "type": "ui",
+    "text": "경험 통조림",
+    "translation": ""
+  },
+  {
+    "id": "P1-115",
+    "pageId": "P1",
+    "textId": 115,
+    "type": "ui",
+    "text": "+6.0/시",
+    "translation": ""
+  },
+  {
+    "id": "P1-116",
+    "pageId": "P1",
+    "textId": 116,
+    "type": "ui",
+    "text": "오류",
+    "translation": ""
+  },
+  {
+    "id": "P1-117",
+    "pageId": "P1",
+    "textId": 117,
+    "type": "ui",
+    "text": "이탈",
+    "translation": ""
+  },
+  {
+    "id": "P1-118",
+    "pageId": "P1",
+    "textId": 118,
+    "type": "ui",
+    "text": "패치",
+    "translation": ""
+  },
+  {
+    "id": "P1-119",
+    "pageId": "P1",
+    "textId": 119,
+    "type": "ui",
+    "text": "자유",
+    "translation": ""
+  },
+  {
+    "id": "P1-120",
+    "pageId": "P1",
+    "textId": 120,
+    "type": "ui",
+    "text": "Nail",
+    "translation": ""
+  },
+  {
+    "id": "P1-121",
+    "pageId": "P1",
+    "textId": 121,
+    "type": "ui",
+    "text": "[ OK ]",
+    "translation": ""
+  },
+  {
+    "id": "P1-122",
+    "pageId": "P1",
+    "textId": 122,
+    "type": "ui",
+    "text": "sisyphe.kernel    同步系统时间",
+    "translation": ""
+  },
+  {
+    "id": "P1-123",
+    "pageId": "P1",
+    "textId": 123,
+    "type": "ui",
+    "text": "[ OK ]",
+    "translation": ""
+  },
+  {
+    "id": "P1-124",
+    "pageId": "P1",
+    "textId": 124,
+    "type": "ui",
+    "text": "lenoir.revelation 漆黑之神的广播-行动指示",
+    "translation": ""
+  },
+  {
+    "id": "P1-125",
+    "pageId": "P1",
+    "textId": 125,
+    "type": "ui",
+    "text": "[ OK ]",
+    "translation": ""
+  },
+  {
+    "id": "P1-126",
+    "pageId": "P1",
+    "textId": 126,
+    "type": "ui",
+    "text": "maintenance       监视 27 种 .sys 例程",
+    "translation": ""
+  },
+  {
+    "id": "P1-127",
+    "pageId": "P1",
+    "textId": 127,
+    "type": "ui",
+    "text": "[ OK ]",
+    "translation": ""
+  },
+  {
+    "id": "P1-128",
+    "pageId": "P1",
+    "textId": 128,
+    "type": "ui",
+    "text": "warden_avatar     看守待机",
+    "translation": ""
+  },
+  {
+    "id": "P1-129",
+    "pageId": "P1",
+    "textId": 129,
+    "type": "ui",
+    "text": "[FATE]",
+    "translation": ""
+  },
+  {
+    "id": "P1-130",
+    "pageId": "P1",
+    "textId": 130,
+    "type": "ui",
+    "text": "fate_tracker      外来者信号检测",
+    "translation": ""
+  },
+  {
+    "id": "P1-131",
+    "pageId": "P1",
+    "textId": 131,
+    "type": "ui",
+    "text": "[ OK ]",
+    "translation": ""
+  },
+  {
+    "id": "P1-132",
+    "pageId": "P1",
+    "textId": 132,
+    "type": "ui",
+    "text": "auth              管理员认证：神父（莫里斯）.锤派巨人",
+    "translation": ""
+  },
+  {
+    "id": "P1-133",
+    "pageId": "P1",
+    "textId": 133,
+    "type": "ui",
+    "text": "T",
+    "translation": ""
+  },
+  {
+    "id": "P1-134",
+    "pageId": "P1",
+    "textId": 134,
+    "type": "ui",
+    "text": "L",
+    "translation": ""
+  },
+  {
+    "id": "P1-135",
+    "pageId": "P1",
+    "textId": 135,
+    "type": "ui",
+    "text": "S",
+    "translation": ""
+  },
+  {
+    "id": "P1-136",
+    "pageId": "P1",
+    "textId": 136,
+    "type": "ui",
+    "text": "NEW",
+    "translation": ""
+  },
+  {
+    "id": "P1-137",
+    "pageId": "P1",
+    "textId": 137,
+    "type": "ui",
+    "text": "v1.2.0 · 회차와 시나리오 완결 외 버전별 업데이트 내역",
+    "translation": ""
+  },
+  {
+    "id": "P1-138",
+    "pageId": "P1",
+    "textId": 138,
+    "type": "ui",
+    "text": "P",
+    "translation": ""
+  },
+  {
+    "id": "P1-139",
+    "pageId": "P1",
+    "textId": 139,
+    "type": "ui",
+    "text": "PC 전용",
+    "translation": ""
+  },
+  {
+    "id": "P1-140",
+    "pageId": "P1",
+    "textId": 140,
+    "type": "ui",
+    "text": "키보드로 코드를 고치는 게임입니다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-141",
+    "pageId": "P1",
+    "textId": 141,
+    "type": "ui",
+    "text": "물리 키보드가 있는 PC",
+    "translation": ""
+  },
+  {
+    "id": "P1-142",
+    "pageId": "P1",
+    "textId": 142,
+    "type": "ui",
+    "text": "에서 가로 1100px 이상 화면으로 플레이해 주십시오.",
+    "translation": ""
+  },
+  {
+    "id": "P1-143",
+    "pageId": "P1",
+    "textId": 143,
+    "type": "ui",
+    "text": "깜빡임 주의",
+    "translation": ""
+  },
+  {
+    "id": "P1-144",
+    "pageId": "P1",
+    "textId": 144,
+    "type": "ui",
+    "text": "시스템 오류가 쌓이면 화면이",
+    "translation": ""
+  },
+  {
+    "id": "P1-145",
+    "pageId": "P1",
+    "textId": 145,
+    "type": "ui",
+    "text": "깜빡이고 흔들리며 색이 번집니다",
+    "translation": ""
+  },
+  {
+    "id": "P1-146",
+    "pageId": "P1",
+    "textId": 146,
+    "type": "ui",
+    "text": ". 빛에 민감하신 분은 시작 전에",
+    "translation": ""
+  },
+  {
+    "id": "P1-147",
+    "pageId": "P1",
+    "textId": 147,
+    "type": "ui",
+    "text": "에서 화면 글리치 효과를 끄거나 연출 줄이기를 켜 주십시오.",
+    "translation": ""
+  },
+  {
+    "id": "P1-148",
+    "pageId": "P1",
+    "textId": 148,
+    "type": "ui",
+    "text": "스포일러",
+    "translation": ""
+  },
+  {
+    "id": "P1-149",
+    "pageId": "P1",
+    "textId": 149,
+    "type": "ui",
+    "text": "《Limbus Company》",
+    "translation": ""
+  },
+  {
+    "id": "P1-150",
+    "pageId": "P1",
+    "textId": 150,
+    "type": "ui",
+    "text": "10장(시지프 백화점)",
+    "translation": ""
+  },
+  {
+    "id": "P1-151",
+    "pageId": "P1",
+    "textId": 151,
+    "type": "ui",
+    "text": "의 설정과 인물이 등장합니다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-152",
+    "pageId": "P1",
+    "textId": 152,
+    "type": "ui",
+    "text": "팬게임",
+    "translation": ""
+  },
+  {
+    "id": "P1-153",
+    "pageId": "P1",
+    "textId": 153,
+    "type": "ui",
+    "text": "Project Moon과 관계없는",
+    "translation": ""
+  },
+  {
+    "id": "P1-154",
+    "pageId": "P1",
+    "textId": 154,
+    "type": "ui",
+    "text": "비공식 · 비영리",
+    "translation": ""
+  },
+  {
+    "id": "P1-155",
+    "pageId": "P1",
+    "textId": 155,
+    "type": "ui",
+    "text": "2차 창작물입니다. 원작의 세계관과 인물에 대한 권리는 Project Moon에 있습니다.",
+    "translation": ""
+  },
+  {
+    "id": "P1-156",
+    "pageId": "P1",
+    "textId": 156,
+    "type": "ui",
+    "text": "Project Moon 《Limbus Company》 비공식 팬게임",
+    "translation": ""
+  },
+  {
+    "id": "P1-157",
+    "pageId": "P1",
+    "textId": 157,
+    "type": "ui",
+    "text": "진행 상황과 기록은 이 브라우저에만 저장됩니다",
+    "translation": ""
+  },
+  {
+    "id": "P1-158",
+    "pageId": "P1",
+    "textId": 158,
+    "type": "ui",
+    "text": "v1.2.0",
+    "translation": ""
+  }
+]

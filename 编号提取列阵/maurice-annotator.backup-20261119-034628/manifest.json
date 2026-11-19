@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Maurice 标注 / 汉化",
+  "version": "3.5",
+  "description": "按 F1 标注文本，支持隐藏文本提取、动态数字替换和词库管理",
+  "permissions": [ "activeTab", "scripting", "downloads", "storage" ],
+  "host_permissions": [ "https://lell1203.github.io/*" ],
+  "action": { "default_title": "按 F1 打开面板" },
+  "content_scripts": [
+    {
+      "matches": [ "https://lell1203.github.io/*" ],
+      "js": [ "content.js" ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": { "service_worker": "background.js" }
+}

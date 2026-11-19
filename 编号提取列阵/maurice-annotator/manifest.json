@@ -1,15 +1,34 @@
 {
   "manifest_version": 3,
   "name": "Maurice 标注 / 汉化",
-  "version": "3.5",
-  "description": "按 F1 标注文本，支持隐藏文本提取、动态数字替换和词库管理",
-  "permissions": [ "activeTab", "scripting", "downloads", "storage" ],
-  "host_permissions": [ "https://lell1203.github.io/*" ],
+  "version": "4.0",
+  "description": "按 F1 标注文本，支持隐藏文本提取、动态数字替换和词库管理（已移除分页界面）",
+  "permissions": ["activeTab", "scripting", "downloads", "storage"],
+  "host_permissions": ["https://lell1203.github.io/*"],
   "action": { "default_title": "按 F1 打开面板" },
   "content_scripts": [
     {
-      "matches": [ "https://lell1203.github.io/*" ],
-      "js": [ "content.js" ],
+      "matches": ["https://lell1203.github.io/*"],
+      "js": [
+        "src/constants.js",
+        "src/html.js",
+        "src/dom-utils.js",
+        "src/storage.js",
+        "src/page-registry.js",
+        "src/pattern-rules.js",
+        "src/dictionary.js",
+        "src/translator.js",
+        "src/extractor.js",
+        "src/badge-layer.js",
+        "src/finder.js",
+        "src/export-builders.js",
+        "src/transfer.js",
+        "src/exporters.js",
+        "src/app.js",
+        "src/panel-template.js",
+        "src/panel.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

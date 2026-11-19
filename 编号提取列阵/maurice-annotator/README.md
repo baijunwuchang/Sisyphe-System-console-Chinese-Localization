@@ -1,0 +1,213 @@
+# Maurice 标注 / 汉化（解耦版 4.0）
+
+对 `https://lell1203.github.io/maurice_simul/` 的汉化辅助扩展：按 **F1** 打开面板，提取页面文本、按编号标注、维护词库，并把译文实时写回页面。
+
+这一版做了两件事：
+
+1. **把原来的单文件 `content.js` 拆成 17 个职责单一的模块**，改由 `content.js` 统一装配；
+2. **移除面板里的分页显示与管理控件**，但保留 `P1-42` 这样的编号格式。
+
+---
+
+## 1. 目录结构
+
+```
+maurice-annotator/
+├─ manifest.json            MV3 清单：模块加载顺序
+├─ background.js            点图标转发消息；必要时按 manifest 补注入
+├─ content.js               启动入口：只负责装配依赖
+├─ src/
+│  ├─ constants.js          常量 / 选择器 / 颜色 / 编号格式
+│  ├─ html.js               HTML 转义
+│  ├─ dom-utils.js          DOM 读取：可见性、清洗、代码区判断、矩形
+│  ├─ storage.js            chrome.storage 读写（数据结构与旧版一致）
+│  ├─ page-registry.js      内部页号分配与页面快照（不展示）
+│  ├─ pattern-rules.js      动态数字规则编译（纯函数）
+│  ├─ dictionary.js         词库增删改查、精确匹配、导入导出 payload
+│  ├─ translator.js         查词、替换文本、监听动态内容
+│  ├─ extractor.js          扫描页面并生成 P?-?? 标注
+│  ├─ badge-layer.js        页面徽标与高亮框
+│  ├─ finder.js             按编号查词
+│  ├─ export-builders.js    导出内容构造（纯函数）
+│  ├─ transfer.js           下载文件 / 读取 JSON 文件
+│  ├─ exporters.js          导出流程编排
+│  ├─ app.js                应用动作（面板调用的 API）
+│  ├─ panel-template.js     面板 HTML 模板
+│  └─ panel.js              面板 DOM 与事件绑定
+└─ tests/
+   ├─ run-tests.mjs         Node 纯逻辑测试（27 项）
+   └─ smoke.mjs             Chrome headless 端到端冒烟测试
+```
+
+## 2. 解耦方式
+
+所有模块只做两件事：
+
+- 向 `globalThis.Maurice` 注册一个**工厂函数**；
+- 通过工厂参数接收依赖，不直接读取别的模块的全局变量。
+
+`content.js` 是唯一的装配点：
+
+```js
+const domUtils = M.createDomUtils({ constants });
+const store = M.createStore({ constants });
+const pageRegistry = M.createPageRegistry({ store, constants });
+const dictionary = M.createDictionary({ store, constants });
+const patternEngine = M.createPatternEngine();
+const translator = M.createTranslator({ dictionary, patternEngine, domUtils, getPageId });
+const extractor = M.createExtractor({ domUtils, constants });
+const badges = M.createBadgeLayer({ domUtils, constants, onBadgeClick });
+const finder = M.createFinder({ store, constants, badges, translator });
+const exporters = M.createExporters({ store, dictionary, translator, transfer, builders });
+const app = M.createApp({ ... });
+const panel = M.createPanel({ app, constants, html, template: M.panelTemplate });
+```
+
+依赖方向大致如下（箭头表示“被谁使用”）：
+
+```
+constants / html
+      ↓
+dom-utils        storage ── page-registry
+      ↓              ↓
+   extractor     dictionary ── pattern-rules
+      ↓              ↓
+   badges        translator
+      ↓              ↓
+                finder
+                     ↓
+export-builders ── transfer ── exporters
+                     ↓
+                    app
+                     ↓
+             panel-template / panel
+                     ↓
+                  content.js
+```
+
+### 为什么不用 ES Module
+
+MV3 的 `content_scripts` 不支持静态 `type: "module"`。为了保持“拖进浏览器就能用、不需要构建”，这里采用：
+
+- manifest 中按顺序列出模块文件；
+- 每个文件用 IIFE 注册工厂；
+- 依赖通过参数注入。
+
+效果等价于一个很小的依赖注入容器，同时保留了可直接加载的便利。
+
+### 模块边界
+
+| 模块 | 只负责 | 不负责 |
+| --- | --- | --- |
+| `storage` | 读写 chrome.storage | 业务规则 |
+| `page-registry` | 页号分配、页面快照 | 展示页号 |
+| `dictionary` | 词库数据与精确匹配 | 正则、DOM |
+| `pattern-rules` | 动态数字规则 | 存储、DOM |
+| `translator` | 替换与动态监听 | 词库编辑、面板 |
+| `extractor` | 扫描 + 编号 | 保存、渲染 |
+| `badge-layer` | 画徽标 / 高亮 | 业务消息 |
+| `finder` | 查编号 | 面板布局 |
+| `export-builders` | 纯数据 → 字符串 | 下载 |
+| `exporters` | 导出流程 | 面板 |
+| `app` | 组合动作、会话状态 | DOM / HTML |
+| `panel` | DOM、事件 | 业务逻辑 |
+
+## 3. 分页功能的处理
+
+### 已移除
+
+- 面板顶部的“页号”输入框；
+- “新页号”按钮；
+- “抓取过的页面”列表与“刷新”按钮；
+- 提取结果里“存入 P1”这类页号提示。
+
+### 保留
+
+- 编号格式仍然是 **`P?-??`**（例如 `P1-42`），显示在页面徽标、查找提示和导出文件里；
+- 内部仍会按 URL 自动分配页号，用于：
+  - 同一 URL 刷新后编号保持稳定；
+  - “存当前页”的按页词库；
+  - 跨页查找与导出时定位条目。
+
+页号分配现在完全自动：打开页面时分配并保存，用户看不到、也不需要管理。因为不再有“新页号”按钮，如果站点是 SPA 且 URL 变化后需要新页号，下一次点“提取并保存”会按新 URL 自动分配。
+
+> 如果你确实想彻底删除页号存储（`pages` / `pageIdMap`），只需要改 `storage.js` 和 `page-registry.js`；但这样会丢掉旧数据和跨页导出能力，所以本版没有这么做。
+
+## 4. 数据兼容性
+
+存储键和数据结构与旧版 3.5 完全一致：
+
+```
+pageIdMap   { "/path": "P1" }
+pageCounter 6
+pages       { P1: { url, title, extractedAt, texts: [...] } }
+dicts       { custom: { global, perPage }, ... }
+activeDicts ["custom", ...]
+```
+
+- 旧词库、旧页面快照可以直接沿用；
+- 词库文件格式仍是 `maurice-dict` / `1.0`；
+- `custom` 词库继续自动创建并启用。
+
+## 5. 安装与使用
+
+1. 打开 `chrome://extensions`；
+2. 打开右上角“开发者模式”；
+3. 点“加载已解压的扩展程序”，选择本目录（含 `manifest.json` 的那一层）；
+4. 打开 `https://lell1203.github.io/maurice_simul/`；
+5. 按 **F1** 或点扩展图标打开面板。
+
+> Chrome 137+ 已移除命令行 `--load-extension`，但“加载已解压的扩展程序”不受影响。
+
+主要操作：
+
+- **提取并保存**：扫描当前页含韩文 / 英文的文本，生成 `P?-??` 编号并画出徽标（隐藏文本也会记录，但不画）；
+- **显示标注 / 取消标注**：控制徽标；
+- **应用翻译**：把已启用词库写回当前页面；
+- **查找**：输入 `P1-42` 定位并高亮；
+- **存全局 / 存当前页**：写进 `custom` 词库；
+- **导入文件 / 导出**：词库与文本导出。
+
+## 6. 测试
+
+### 纯逻辑测试
+
+```bat
+node tests\run-tests.mjs
+```
+
+覆盖：文本清洗、HTML 转义、动态数字规则、词库优先级、页号分配、翻译查找、查词、JSON/TSV/未翻译/合并导出，以及“面板不再含分页控件、manifest 文件齐全”。
+
+### 端到端冒烟测试
+
+```bat
+set CHROME_PATH=D:\path\to\chrome-for-testing\chrome.exe
+node tests\smoke.mjs
+```
+
+脚本会用临时 profile 启动 headless Chrome，加载扩展并：
+
+1. 按 F1 打开面板，确认没有“新页号 / 抓取过的页面”；
+2. 点“提取并保存”，确认有徽标；
+3. 通过文件输入导入一个测试词库，确认页面出现译文、词库列表已启用；
+4. 截图到 `tests/screenshots/smoke.png`。
+
+由于 Chrome 137+ 的品牌版移除了 `--load-extension`，冒烟测试需要 **Chrome for Testing** 或 Chromium。本地验证结果：一次提取约 770 条文本、180+ 个徽标，导入词库后成功替换页面文本。
+
+## 7. 与旧版的行为差异
+
+除分页界面外，基本保持原逻辑，额外修正了几个小问题：
+
+1. **徽标定位**：覆盖层是 `position: fixed`，坐标改用视口坐标，滚动后不会偏移（旧版会叠加 `scrollY`）；
+2. **页号防撞**：分配新页号前会扫描已有的 `P?`，避免 `pageCounter` 落后时生成重复编号；
+3. **动态规则优先级**：同样长度的正则，本页规则优先于全局规则（旧版排序不稳定）；
+4. **补注入**：`background.js` 改为从 `chrome.runtime.getManifest()` 读取模块清单，不再维护第二份文件列表。
+
+## 8. 扩展指南
+
+- **加面板按钮**：改 `panel-template.js` 加 `data-act`，在 `panel.js` 的 `switch` 里调用 `app` 方法；
+- **加业务动作**：在 `app.js` 里实现并返回一段提示文字，面板会自动显示；
+- **加词库字段**：改 `dictionary.js` 与 `export-builders.js`；
+- **加导出格式**：在 `export-builders.js` 加纯函数，在 `exporters.js` 里下载；
+- **加提取规则**：改 `constants.js` 的正则或 `dom-utils.js` 的判断；
+- **加新模块**：新建 `src/xxx.js` 注册工厂 → 加进 `manifest.json` 的 `js` 数组（顺序即加载顺序）→ 在 `content.js` 装配；测试会自动检查 `src/` 下所有文件都已登记。
