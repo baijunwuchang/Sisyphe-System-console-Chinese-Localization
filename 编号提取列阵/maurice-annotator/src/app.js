@@ -19,6 +19,7 @@
      * @param {object} deps.finder
      * @param {object} deps.exporters
      * @param {object} deps.transfer
+     * @param {object} deps.textTable 可编辑对照表
      * @param {object} deps.selection 选区服务
      */
     function createApp({
@@ -32,6 +33,7 @@
         finder,
         exporters,
         transfer,
+        textTable,
         selection
     }) {
         /** 当前页的提取结果（含 DOM 引用，仅内存） */
@@ -109,12 +111,19 @@
 
         // ===== 翻译 =====
 
+        /** 重建规则并应用，返回页面实际变化的节点数 */
+        async function reapply() {
+            translator.rebuild(session.pageId);
+            const count = translator.apply(session.pageId);
+            if (badges.isVisible()) badges.reposition();
+            return count;
+        }
+
         async function applyAll() {
             await init();
             await store.load();
-            translator.rebuild(session.pageId);
-            const count = translator.apply(session.pageId);
-            return `手动扫了一遍，替换了 ${count} 个文本节点（代码区没碰）`;
+            const count = await reapply();
+            return `手动扫了一遍，更新了 ${count} 个文本节点（代码区没碰）`;
         }
 
         async function saveTranslation({ source, target, scope }) {
@@ -127,12 +136,11 @@
             await store.load();
             await dictionary.saveTranslation(original, translated, scope, session.pageId);
 
-            translator.rebuild(session.pageId);
-            const count = translator.apply(session.pageId);
+            const count = await reapply();
 
             return (
                 `存到 custom 词库了（${scope === 'page' ? '只管这一页' : '全页面生效'}）：\n` +
-                `${original}\n→ ${translated}\n顺手替换了 ${count} 个节点`
+                `${original}\n→ ${translated}\n页面更新了 ${count} 个节点`
             );
         }
 
@@ -145,10 +153,23 @@
             await dictionary.saveTranslation(original, '', 'global', session.pageId);
             await dictionary.saveTranslation(original, '', 'page', session.pageId);
 
-            translator.rebuild(session.pageId);
-            translator.apply(session.pageId);
+            const count = await reapply();
+            return (
+                `从 custom 词库移除了：${original}\n` +
+                `页面已重新翻译，更新了 ${count} 个节点` +
+                `（没有其他词库提供译文时会恢复原文）`
+            );
+        }
 
-            return `从 custom 词库移除了：${original}\n（页面上已经变了的字，得刷新才能恢复）`;
+        /** 清除页面上已经应用的译文，恢复原文；词库保留 */
+        async function clearPageTranslations() {
+            await init();
+            const count = translator.clearApplied();
+            if (badges.isVisible()) badges.reposition();
+            return (
+                `已清除页面上的 ${count} 处译文，恢复为原文\n` +
+                `（词库仍然保留，点“应用翻译”可以重新应用）`
+            );
         }
 
         // ===== 词库 =====
@@ -158,12 +179,25 @@
             await store.load();
             await dictionary.setEnabled(name, enabled);
 
-            translator.rebuild(session.pageId);
-            const count = translator.apply(session.pageId);
+            const count = await reapply();
 
             return (
-                `词库已${enabled ? '勾上' : '取消'}，这次替换了 ${count} 个节点\n` +
-                `（变回原文需要刷新页面的）`
+                `词库已${enabled ? '勾上' : '取消'}，页面重新翻译后更新了 ${count} 个节点`
+            );
+        }
+
+        /** 只加载某一个词库（其他词库暂时停用） */
+        async function loadDictAlone(name) {
+            await init();
+            await store.load();
+            await dictionary.setOnly(name);
+
+            const count = await reapply();
+
+            return (
+                `已单独加载词库「${name}」\n` +
+                `其他词库已暂时取消勾选\n` +
+                `页面更新了 ${count} 个节点`
             );
         }
 
@@ -172,22 +206,50 @@
             await store.load();
             const removed = await dictionary.remove(name);
             if (!removed) throw new Error('custom 词库不能删');
-            return `已删除词库「${name}」`;
+            const count = await reapply();
+            return `已删除词库「${name}」\n页面重新翻译后更新了 ${count} 个节点`;
         }
 
+        /**
+         * 导入文件：JSON 词库按原逻辑导入；TSV / 文本按可编辑对照表导入。
+         */
         async function importFile(file) {
             await init();
             await store.load();
 
-            const data = await transfer.readJsonFile(file);
-            const { key, isOverwrite } = await dictionary.importData(data);
+            const content = await transfer.readTextFile(file);
+            const trimmed = String(content || '').replace(/^\uFEFF/, '').trim();
+            const filename = String(file && file.name ? file.name : '').toLowerCase();
 
-            translator.rebuild(session.pageId);
-            const count = translator.apply(session.pageId);
+            if (filename.endsWith('.json') || trimmed.startsWith('{')) {
+                let data;
+                try {
+                    data = JSON.parse(trimmed);
+                } catch (_) {
+                    throw new Error('这不是个合法的 JSON 文件');
+                }
+
+                const { key, isOverwrite } = await dictionary.importData(data);
+                const count = await reapply();
+
+                return (
+                    `词库「${key}」导入成功${isOverwrite ? '（把旧的盖了）' : ''}\n` +
+                    `页面更新了 ${count} 个节点`
+                );
+            }
+
+            const parsed = textTable.parse(content);
+            if (!parsed.rows.length) {
+                throw new Error('对照表里没有可导入的行（需要 原文 / 编号 / 译文 三列）');
+            }
+
+            const result = await dictionary.applyTable(parsed.rows);
+            const count = await reapply();
 
             return (
-                `词库「${key}」导入成功${isOverwrite ? '（把旧的盖了）' : ''}\n` +
-                `这次替换了 ${count} 个节点`
+                `对照表导入成功：更新 ${result.updated} 条，跳过 ${result.skipped + parsed.skipped} 条\n` +
+                `译文写入「${result.dictName}」，已放到最高优先级\n` +
+                `页面更新了 ${count} 个节点`
             );
         }
 
@@ -251,6 +313,23 @@
             return `已导出：${filename}`;
         }
 
+        /** 导出全部文本的可编辑对照表（未翻译显示“暂无”） */
+        async function exportTable() {
+            await init();
+            const filename = await exporters.exportTable();
+            return (
+                `已导出对照表：${filename}\n` +
+                `直接编辑“译文”列后，用“导入对照表”导回即可生效`
+            );
+        }
+
+        /** 只导出已经有译文的文本 */
+        async function exportTranslated() {
+            await init();
+            const filename = await exporters.exportTranslated();
+            return `已导出已翻译文本：${filename}`;
+        }
+
         async function exportPending() {
             await init();
             const filename = await exporters.exportPending();
@@ -283,10 +362,14 @@
             clearSelection,
             saveTranslation,
             deleteTranslation,
+            clearPageTranslations,
             toggleDict,
+            loadDictAlone,
             deleteDict,
             importFile,
             exportAll,
+            exportTable,
+            exportTranslated,
             exportPending,
             exportMerged,
             exportDict

@@ -46,13 +46,21 @@
         DICT_FORMAT: 'maurice-dict',
         DICT_FORMAT_VERSION: '1.0',
 
+        /** 可编辑对照表的列名 / 未翻译占位 / 导入后生成的词库名 */
+        TABLE_HEADER: Object.freeze(['原文', '编号', '译文']),
+        TABLE_EMPTY: '暂无',
+        TABLE_DICT_NAME: '导入对照表',
+        TABLE_DICT_DESCRIPTION: '从可编辑对照表导入的译文',
+
         /**
-         * 导出文件名。词库类文件（待翻译 / 合并 / 单个词库）可以再次导入，
-         * 所以固定用中文名；文本对照文件不是词库，保留原英文名避免误导入。
+         * 导出文件名。可导入的对照表 / 词库都用中文名；
+         * JSON 备份保留英文名，避免误当成可导入文件。
          */
         EXPORT_FILENAMES: Object.freeze({
             textsJson: 'maurice_texts.json',
             textsTsv: 'maurice_texts.tsv',
+            table: '文本对照表.tsv',
+            translatedTable: '已翻译文本.tsv',
             pendingDict: '待翻译词库.json',
             mergedDict: '合并词库.json',
             dictPrefix: '词库_',

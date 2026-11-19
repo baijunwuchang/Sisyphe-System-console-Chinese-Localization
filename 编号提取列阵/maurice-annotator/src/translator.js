@@ -1,8 +1,14 @@
 /**
- * 翻译器：查词 + 替换文本节点 + 监听动态内容。
+ * 翻译器：查词 + 替换文本节点 + 监听动态内容 + 清除页面译文。
  *
  * 只认三个协作者：词库（精确匹配）、规则引擎（动态数字）、DOM 工具。
  * 页号通过 getPageId() 延迟获取，避免把“当前页”做成全局可变状态。
+ *
+ * 节点状态用 Map 记录，而不是只记“处理过”：
+ *   original 最初原文（带空白）
+ *   applied  当前应用的译文
+ *   rendered 实际写进节点的完整文本
+ * 这样导入新译文时可以原地更新，删词条后可以恢复原文，“清除译文”也能批量还原。
  */
 (function registerTranslator(global) {
     'use strict';
@@ -18,8 +24,8 @@
         /** 当前页号对应的编译后规则 */
         let rules = [];
 
-        /** 已经处理过的文本节点，避免观察器反复套娃 */
-        const replacedNodes = new WeakSet();
+        /** 文本节点 → { original, applied, rendered } */
+        const nodeStates = new Map();
 
         let observer = null;
 
@@ -48,50 +54,114 @@
             return null;
         }
 
+        function cleanupStates() {
+            for (const node of nodeStates.keys()) {
+                if (!node.isConnected) nodeStates.delete(node);
+            }
+        }
+
         /**
-         * 替换单个文本节点，保留前后空白。
-         * @returns {boolean} 是否真的替换了
+         * 处理单个文本节点，保留前后空白。
+         * 已有译文时可以原地更新；译文被删除时可以恢复原文。
+         * @returns {boolean} 页面文本是否真的发生变化
          */
         function replaceNode(node, pageId = getPageId()) {
-            if (replacedNodes.has(node)) return false;
+            const currentRaw = node.textContent || '';
+            let state = nodeStates.get(node);
 
-            const raw = node.textContent || '';
+            // 节点文本被页面自己改过（不再是我们写进去的译文），以当前文本为新原文
+            if (state && state.applied !== null && currentRaw !== state.rendered) {
+                nodeStates.delete(node);
+                state = null;
+            }
+
+            const raw = state ? state.original : currentRaw;
             const text = domUtils.cleanText(raw);
             if (!text) return false;
 
-            // 代码区绝对不碰，标记后不再重复判断
+            // 代码区绝对不碰；如果之前误翻过，恢复原文
             if (domUtils.getTextType(node) === 'code') {
-                replacedNodes.add(node);
+                if (state && state.applied !== null) {
+                    node.textContent = state.original;
+                    nodeStates.delete(node);
+                    return true;
+                }
                 return false;
             }
 
             const translated = lookup(text, pageId);
-            if (translated === null) return false;
+
+            if (translated === null) {
+                if (state && state.applied !== null) {
+                    node.textContent = state.original;
+                    nodeStates.delete(node);
+                    return true;
+                }
+                return false;
+            }
+
+            if (state && state.applied === translated) return false;
 
             const leading = raw.match(/^\s*/)[0];
             const trailing = raw.match(/\s*$/)[0];
-            node.textContent = leading + translated + trailing;
+            const rendered = leading + translated + trailing;
 
-            replacedNodes.add(node);
+            node.textContent = rendered;
+            nodeStates.set(node, {
+                original: state ? state.original : raw,
+                applied: translated,
+                rendered
+            });
             return true;
         }
 
         /**
          * 替换 root 下所有可翻译文本节点。
-         * @returns {number} 替换数量
+         * @returns {number} 发生变化的节点数
          */
         function replaceAll(root = document.body, pageId = getPageId()) {
             let count = 0;
-            domUtils.forEachTextNode(root, (node, text) => {
-                if (!text) return;
+            domUtils.forEachTextNode(root, (node) => {
                 if (replaceNode(node, pageId)) count++;
             });
             return count;
         }
 
-        /** 手动全页翻译（面板“应用翻译” / 启动时用） */
+        /** 手动全页翻译（面板“应用翻译” / 启动 / 导入词库后用） */
         function apply(pageId = getPageId()) {
+            cleanupStates();
             return replaceAll(document.body, pageId);
+        }
+
+        /**
+         * 清除页面上已经应用的译文，全部恢复成原文。
+         * 词库不动，之后仍可重新“应用翻译”。
+         * @returns {number} 恢复的节点数
+         */
+        function clearApplied() {
+            let count = 0;
+            for (const [node, state] of nodeStates) {
+                if (node.isConnected && state.applied !== null) {
+                    node.textContent = state.original;
+                    count++;
+                }
+                nodeStates.delete(node);
+            }
+            return count;
+        }
+
+        /**
+         * 取节点的“原文”：已翻译节点返回最初原文，未翻译节点返回当前文本。
+         * 提取器用它，保证页面翻译后再次提取仍能拿到原文。
+         */
+        function getOriginalText(node) {
+            const state = nodeStates.get(node);
+            if (!state) return node.textContent || '';
+            // 页面自己改过文本时，不再相信旧缓存
+            if (state.applied !== null && node.textContent !== state.rendered) {
+                return node.textContent || '';
+            }
+            return state.original;
         }
 
         /**
@@ -133,6 +203,8 @@
             replaceNode,
             replaceAll,
             apply,
+            clearApplied,
+            getOriginalText,
             startObserver,
             stopObserver,
             getRuleCount: () => rules.length

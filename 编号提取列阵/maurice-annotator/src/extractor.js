@@ -10,8 +10,9 @@
      * @param {object} deps
      * @param {object} deps.domUtils
      * @param {object} deps.constants
+     * @param {(node: Text) => string} [deps.getOriginalText] 已翻译节点取原文
      */
-    function createExtractor({ domUtils, constants }) {
+    function createExtractor({ domUtils, constants, getOriginalText }) {
         /**
          * @param {string} pageId
          * @returns {{annotations: Array<object>, stats: {total:number, visible:number, hidden:number}}}
@@ -23,7 +24,12 @@
             let textId = 0;
             let visibleCount = 0;
 
-            domUtils.forEachTextNode(document.body, (node, text) => {
+            domUtils.forEachTextNode(document.body, (node) => {
+                // 页面可能已经被翻译，优先取节点原始文本，保证编号 / 导出稳定
+                const raw = typeof getOriginalText === 'function'
+                    ? getOriginalText(node)
+                    : (node.textContent || '');
+                const text = domUtils.cleanText(raw);
                 if (!text) return;
                 // 含有韩文或英文才算待翻译文本
                 if (!constants.KOREAN_RE.test(text) && !constants.ENGLISH_RE.test(text)) return;

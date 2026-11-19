@@ -243,6 +243,63 @@ await test('导出为合法词库 payload', async () => {
     assert.equal(payload.global.Hello, '你好');
 });
 
+await test('对照表导入：生成独立词库并放到最高优先级', async () => {
+    const { store } = await createHarness();
+    const dicts = M.createDictionary({ store, constants });
+    await dicts.init();
+
+    const result = await dicts.applyTable([
+        { text: 'Hello', id: 'P1-1', pageId: 'P1', translation: '你好' },
+        { text: 'World', id: 'P2-1', pageId: 'P2', translation: '暂无' }
+    ]);
+
+    assert.equal(result.updated, 1);
+    assert.equal(result.skipped, 1);
+    assert.equal(result.dictName, constants.TABLE_DICT_NAME);
+
+    const table = dicts.get(constants.TABLE_DICT_NAME);
+    assert.equal(table.global.Hello, '你好');
+    assert.equal(table.perPage.P1.Hello, '你好');
+    assert.equal(table.global.World, undefined);
+    assert.equal(table.perPage.P2, undefined);
+    assert.equal(dicts.activeNames()[dicts.activeNames().length - 1], constants.TABLE_DICT_NAME);
+    assert.equal(dicts.lookupExact('Hello', 'P1'), '你好');
+});
+
+await test('对照表更新译文；改回“暂无”会清掉旧值', async () => {
+    const { store } = await createHarness();
+    const dicts = M.createDictionary({ store, constants });
+    await dicts.init();
+
+    await dicts.applyTable([
+        { text: 'Hello', id: 'P1-1', pageId: 'P1', translation: '你好' }
+    ]);
+    assert.equal(dicts.lookupExact('Hello', 'P1'), '你好');
+
+    await dicts.applyTable([
+        { text: 'Hello', id: 'P1-1', pageId: 'P1', translation: '您好' }
+    ]);
+    assert.equal(dicts.lookupExact('Hello', 'P1'), '您好');
+
+    await dicts.applyTable([
+        { text: 'Hello', id: 'P1-1', pageId: 'P1', translation: '暂无' }
+    ]);
+    assert.equal(dicts.lookupExact('Hello', 'P1'), null);
+});
+
+await test('单独加载：只保留一个启用词库', async () => {
+    const { store } = await createHarness();
+    const dicts = M.createDictionary({ store, constants });
+    await dicts.init();
+    await dicts.importData({ name: 'demo', global: { A: '甲' } });
+
+    await dicts.setOnly('demo');
+    assert.deepEqual(plain(dicts.activeNames()), ['demo']);
+    assert.equal(dicts.lookupExact('A', 'P1'), '甲');
+
+    await assert.rejects(() => dicts.setOnly('missing'), /找不到/);
+});
+
 /* ------------------------------------------------------------------ */
 /* 4. 页号（仅内部）                                                   */
 /* ------------------------------------------------------------------ */
@@ -500,6 +557,7 @@ await test('选区查找：无选区 / 未提取 / 无匹配时的提示', async
 console.log('\n[7] 导出');
 
 const builders = M.createExportBuilders({ constants });
+const textTable = M.createTextTable({ constants });
 
 const samplePages = {
     P1: {
@@ -534,6 +592,50 @@ await test('文本 TSV：表头与行数', () => {
     assert.equal(lines[0], 'id\ttype\ttext\ttranslation');
     assert.equal(lines.length, 5);
     assert.match(tsv, /P1-1\tui\tHello\t你好/);
+});
+
+await test('可编辑对照表：原文 / 编号 / 译文，未翻译写暂无', () => {
+    const tsv = textTable.buildAll({ pages: samplePages, lookup: sampleLookup });
+    const lines = tsv.split('\n');
+    assert.equal(lines[0], '原文\t编号\t译文');
+    assert.equal(lines.length, 4); // 表头 + Hello / Goodbye / World，代码区不导出
+    assert.equal(lines[1], 'Hello\tP1-1\t你好');
+    assert.equal(lines[2], 'Goodbye\tP1-2\t暂无');
+    assert.equal(lines[3], 'World\tP2-1\t暂无');
+});
+
+await test('已翻译对照表：只保留有译文的行', () => {
+    const tsv = textTable.buildTranslated({ pages: samplePages, lookup: sampleLookup });
+    const lines = tsv.split('\n');
+    assert.equal(lines[0], '原文\t编号\t译文');
+    assert.equal(lines.length, 2);
+    assert.equal(lines[1], 'Hello\tP1-1\t你好');
+});
+
+await test('解析对照表：新格式 / 旧 TSV / 暂无与空译文', () => {
+    const parsed = textTable.parse(
+        '原文\t编号\t译文\n' +
+        'Hello\tP1-1\t你好\n' +
+        'World\tP2-1\t暂无\n' +
+        'Goodbye\tP1-2\t\n'
+    );
+    assert.equal(parsed.rows.length, 3);
+    assert.deepEqual(
+        plain(parsed.rows[0]),
+        { text: 'Hello', id: 'P1-1', pageId: 'P1', translation: '你好' }
+    );
+    assert.equal(parsed.rows[1].translation, '暂无');
+    assert.equal(parsed.rows[1].pageId, 'P2');
+    assert.equal(parsed.rows[2].translation, '');
+
+    const legacy = textTable.parse(
+        'id\ttype\ttext\ttranslation\n' +
+        'P1-3\tui\tOld text\t旧文本'
+    );
+    assert.equal(legacy.rows.length, 1);
+    assert.equal(legacy.rows[0].text, 'Old text');
+    assert.equal(legacy.rows[0].pageId, 'P1');
+    assert.equal(legacy.rows[0].translation, '旧文本');
 });
 
 await test('未翻译列表：跳过代码区与已翻译条目', () => {
@@ -612,6 +714,40 @@ await test('可再次导入的词库文件使用中文文件名', async () => {
     assert.match(downloads[2].mime, /json/);
 });
 
+await test('可编辑对照表导出：文件名与内容', async () => {
+    const downloads = [];
+    const fakeTransfer = {
+        downloadFile(content, filename, mime) {
+            downloads.push({ content, filename, mime });
+        }
+    };
+    const fakeStore = {
+        state: { pages: samplePages },
+        async load() {}
+    };
+    const exporters = M.createExporters({
+        store: fakeStore,
+        dictionary: {},
+        translator: { lookup: sampleLookup },
+        transfer: fakeTransfer,
+        builders,
+        textTable,
+        constants
+    });
+
+    assert.equal(await exporters.exportTable(), '文本对照表.tsv');
+    assert.equal(await exporters.exportTranslated(), '已翻译文本.tsv');
+    assert.equal(downloads.length, 2);
+
+    assert.match(downloads[0].content, /^原文\t编号\t译文/);
+    assert.match(downloads[0].content, /Hello\tP1-1\t你好/);
+    assert.match(downloads[0].content, /Goodbye\tP1-2\t暂无/);
+    assert.match(downloads[0].mime, /tab-separated/);
+
+    assert.match(downloads[1].content, /Hello\tP1-1\t你好/);
+    assert.ok(!downloads[1].content.includes('Goodbye'));
+});
+
 /* ------------------------------------------------------------------ */
 /* 8. 分页移除 / 文件清单                                              */
 /* ------------------------------------------------------------------ */
@@ -627,6 +763,9 @@ await test('面板不再包含页号、新页号、页面列表', () => {
     assert.ok(!markup.includes('data-act="refresh"'));
     assert.ok(markup.includes('提取并保存'));
     assert.ok(markup.includes('P1-42'), '编号格式提示应保留');
+    for (const label of ['清除译文', '导出全部（可编辑）', '导出已翻译', '导入对照表']) {
+        assert.ok(markup.includes(label), `面板缺少“${label}”`);
+    }
 });
 
 await test('manifest 中列出的文件都存在，且模块全部登记', () => {

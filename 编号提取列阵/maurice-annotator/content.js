@@ -27,6 +27,7 @@
         'createSelectionService',
         'createFinder',
         'createExportBuilders',
+        'createTextTable',
         'createTransfer',
         'createExporters',
         'createApp',
@@ -61,7 +62,11 @@
         getPageId: () => session.pageId
     });
 
-    const extractor = M.createExtractor({ domUtils, constants });
+    const extractor = M.createExtractor({
+        domUtils,
+        constants,
+        getOriginalText: translator.getOriginalText
+    });
 
     const badges = M.createBadgeLayer({
         domUtils,
@@ -76,6 +81,7 @@
 
     const finder = M.createFinder({ store, constants, badges, translator, selection });
     const builders = M.createExportBuilders({ constants });
+    const textTable = M.createTextTable({ constants });
 
     const exporters = M.createExporters({
         store,
@@ -83,6 +89,7 @@
         translator,
         transfer,
         builders,
+        textTable,
         constants
     });
 
@@ -97,6 +104,7 @@
         finder,
         exporters,
         transfer,
+        textTable,
         selection
     });
 

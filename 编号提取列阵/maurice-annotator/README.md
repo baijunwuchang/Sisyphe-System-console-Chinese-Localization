@@ -2,11 +2,12 @@
 
 对 `https://lell1203.github.io/maurice_simul/` 的汉化辅助扩展：按 **F1** 打开面板，提取页面文本、按编号标注、维护词库，并把译文实时写回页面。
 
-这一版做了三件事：
+这一版主要做了四件事：
 
-1. **把原来的单文件 `content.js` 拆成 18 个职责单一的模块**，改由 `content.js` 统一装配；
+1. **把原来的单文件 `content.js` 拆成 19 个职责单一的模块**，改由 `content.js` 统一装配；
 2. **移除面板里的分页显示与管理控件**，但保留 `P1-42` 这样的编号格式；
-3. **新增选区查找**：在页面上选中文本后点“查找”，直接定位它属于哪个编号，并按选区范围决定高亮整段还是只高亮选中部分。
+3. **新增选区查找**：在页面上选中文本后点“查找”，直接定位它属于哪个编号，并按选区范围决定高亮整段还是只高亮选中部分；
+4. **新增可编辑对照表**：导出“原文 / 编号 / 译文”，未翻译写“暂无”，改完直接导入即可原地更新页面；同时支持只导出已翻译文本、清除页面译文、单独加载某个词库。
 
 > 想逐个文件看“写了什么、负责什么、依赖谁”，见 [文件说明.md](文件说明.md)。
 
@@ -34,14 +35,15 @@ maurice-annotator/
 │  ├─ badge-layer.js        页面徽标与高亮框
 │  ├─ selection.js          文本选区捕获与选区 → 标注映射
 │  ├─ finder.js             按编号 / 按选区查词
-│  ├─ export-builders.js    导出内容构造（纯函数）
+│  ├─ export-builders.js    旧版导出内容构造（纯函数）
+│  ├─ text-table.js         可编辑对照表构造 / 解析（纯函数）
 │  ├─ transfer.js           下载文件 / 读取 JSON 文件
 │  ├─ exporters.js          导出流程编排
 │  ├─ app.js                应用动作（面板调用的 API）
 │  ├─ panel-template.js     面板 HTML 模板
 │  └─ panel.js              面板 DOM 与事件绑定
 └─ tests/
-   ├─ run-tests.mjs         Node 纯逻辑测试（31 项）
+   ├─ run-tests.mjs         Node 纯逻辑测试（38 项）
    └─ smoke.mjs             Chrome headless 端到端冒烟测试
 ```
 
@@ -66,7 +68,9 @@ const badges = M.createBadgeLayer({ domUtils, constants, onBadgeClick });
 const selection = M.createSelectionService({ constants });
 selection.install();
 const finder = M.createFinder({ store, constants, badges, translator, selection });
-const exporters = M.createExporters({ store, dictionary, translator, transfer, builders });
+const builders = M.createExportBuilders({ constants });
+const textTable = M.createTextTable({ constants });
+const exporters = M.createExporters({ store, dictionary, translator, transfer, builders, textTable, constants });
 const app = M.createApp({ ... });
 const panel = M.createPanel({ app, constants, html, template: M.panelTemplate });
 ```
@@ -116,6 +120,7 @@ MV3 的 `content_scripts` 不支持静态 `type: "module"`。为了保持“拖�
 | `badge-layer` | 画徽标 / 高亮 | 业务消息 |
 | `selection` | 捕获选区、匹配标注节点 | 词库、面板 |
 | `finder` | 按编号 / 按选区查词 | 面板布局 |
+| `text-table` | 构造 / 解析可编辑对照表 | 下载、词库写入 |
 | `export-builders` | 纯数据 → 字符串 | 下载 |
 | `exporters` | 导出流程 | 面板 |
 | `app` | 组合动作、会话状态 | DOM / HTML |
@@ -173,20 +178,41 @@ activeDicts ["custom", ...]
 - **提取并保存**：扫描当前页含韩文 / 英文的文本，生成 `P?-??` 编号并画出徽标（隐藏文本也会记录，但不画）；
 - **显示标注 / 取消标注**：控制徽标；
 - **应用翻译**：把已启用词库写回当前页面；
+- **清除译文**：把页面上已经应用的译文恢复成原文；词库保留，之后可以重新“应用翻译”；
 - **查找**：输入 `P1-42` 定位；或先在页面选中文本（左键拖动或右键拖动都可以），保持输入框留空，点“查找”：
   - 选区落在 1 条标注里：显示所属编号，并高亮**完整本段**文本；
   - 选区覆盖 2 条标注：高亮这 2 段完整文本，并列出两个编号；
   - 选区覆盖超过 2 条标注：只高亮**选中的那部分**，并列出涉及的编号；
 - **存全局 / 存当前页**：写进 `custom` 词库；
-- **导入文件 / 导出**：词库与文本导出。
+- **词库列表的“加载”**：只启用这一个词库并立即应用，其他词库会暂时取消勾选；
+- **导入文件 / 导出**：可导入词库 JSON 或可编辑对照表；可导出全部对照表、已翻译文本、JSON 备份。
 
-导出的词库文件使用中文名，可直接再次导入：
+### 可编辑文本对照表
+
+点“导出全部（可编辑）”得到 `文本对照表.tsv`，列固定为：
+
+| 原文 | 编号 | 译文 |
+| --- | --- | --- |
+| 파일 | P1-1 | 文件 |
+| 편집 | P1-2 | 暂无 |
+
+- 未翻译的译文列写 **`暂无`**；
+- 代码区条目不进入对照表（翻译器不会替换代码区，导出它们会误导）；
+- 直接编辑“译文”列，原样保存后点“导入对照表”导回（TSV，UTF-8 / UTF-16 带 BOM 都可读）；
+- 导入后译文写入独立词库 **`导入对照表`**，并放到启用列表最后（最高优先级）；
+- 页面会**原地更新**，不需要刷新；
+- 把某行改成 `暂无` 或清空译文，会移除对照表里的这条译文；
+- 原文、编号两列请勿改动。
+
+“导出已翻译”会生成 `已翻译文本.tsv`，只包含当前已有译文的行，格式相同。
+
+导出的词库文件同样使用中文名，可直接再次导入：
 
 - `待翻译词库.json`
 - `合并词库.json`
 - `词库_<词库名>.json`（`custom` 导出为 `词库_自定义.json`）
 
-`maurice_texts.json` / `maurice_texts.tsv` 是文本对照数据，不是词库，不能导入。
+`maurice_texts.json` 是旧版 JSON 备份，不是可导入对照表；面板里的“导出 JSON（备份）”仅用于留档。
 
 ## 6. 测试
 
@@ -196,7 +222,7 @@ activeDicts ["custom", ...]
 node tests\run-tests.mjs
 ```
 
-覆盖：文本清洗、HTML 转义、动态数字规则、词库优先级、页号分配、翻译查找、编号查词、选区查词（1 段 / 2 段 / 多段 / 无匹配）、JSON/TSV/未翻译/合并导出、中文词库文件名，以及“面板不再含分页控件、manifest 文件齐全”。
+覆盖：文本清洗、HTML 转义、动态数字规则、词库优先级、页号分配、翻译查找、编号查词、选区查词（1 段 / 2 段 / 多段 / 无匹配）、可编辑对照表（导出 / 解析 / 导入 / 更新 / 暂无清理）、单独加载词库、JSON/TSV/未翻译/合并导出、中文词库文件名，以及“面板不再含分页控件、manifest 文件齐全”。
 
 ### 端到端冒烟测试
 
@@ -212,27 +238,35 @@ node tests\smoke.mjs
 3. 选中一段文本的一部分，点“查找”，确认返回编号并高亮完整段落；
 4. 用右键拖动选中测试文本，确认同样能定位；
 5. 选中 3 段文本，确认只高亮选中的部分并列出 3 个编号；
-6. 通过文件输入导入一个测试词库，确认页面出现译文、词库列表已启用；
-7. 截图到 `tests/screenshots/smoke.png`。
+6. 导入一个 JSON 测试词库，确认页面出现译文；
+7. 导入一个修改过译文的 TSV 对照表，确认页面**原地更新**；
+8. 点“清除译文”，确认页面恢复原文；再点“应用翻译”，确认译文回来；
+9. 点词库行的“加载”，确认只启用该词库、页面切换成它的译文；
+10. 点“导出全部（可编辑）”和“导出已翻译”，确认文件名与结果提示；
+11. 截图到 `tests/screenshots/smoke.png`。
 
-由于 Chrome 137+ 的品牌版移除了 `--load-extension`，冒烟测试需要 **Chrome for Testing** 或 Chromium；本机 **Microsoft Edge 156** 仍接受该参数，实测同样可以跑。验证结果：一次提取约 770 条文本、180+ 个徽标；部分选中定位到编号并高亮完整段落；右键拖动选中 `BetaTwo` 定位到对应编号；选中 3 段文本时只高亮选区并列出 3 个编号；导入词库后成功替换页面文本。
+由于 Chrome 137+ 的品牌版移除了 `--load-extension`，冒烟测试需要 **Chrome for Testing** 或 Chromium；本机 **Microsoft Edge 156** 仍接受该参数，实测同样可以跑。验证结果：一次提取约 770 条文本、180+ 个徽标；部分选中定位到编号并高亮完整段落；右键拖动选中 `BetaTwo` 定位到对应编号；选中 3 段文本时只高亮选区并列出 3 个编号；导入词库后成功替换页面文本；导入修改过译文的对照表后页面原地更新；清除译文能恢复原文，单独加载词库、导出全部/已翻译均正常。
 
 ## 7. 与旧版的行为差异
 
-除分页界面和新增的选区查找外，基本保持原逻辑，额外修正了几个小问题：
+除分页界面和新增的选区查找外，基本保持原逻辑，额外修正/增强了几个点：
 
 1. **徽标定位**：覆盖层是 `position: fixed`，坐标改用视口坐标，滚动后不会偏移（旧版会叠加 `scrollY`）；
 2. **页号防撞**：分配新页号前会扫描已有的 `P?`，避免 `pageCounter` 落后时生成重复编号；
 3. **动态规则优先级**：同样长度的正则，本页规则优先于全局规则（旧版排序不稳定）；
 4. **补注入**：`background.js` 改为从 `chrome.runtime.getManifest()` 读取模块清单，不再维护第二份文件列表；
-5. **选区查找**：新增 `selection.js`，支持左右键选区、1～2 段高亮整段、超过 2 段只高亮选中部分。
+5. **选区查找**：新增 `selection.js`，支持左右键选区、1～2 段高亮整段、超过 2 段只高亮选中部分；
+6. **译文可原地更新**：翻译器改为记录每个节点的原文/已应用译文，导入新译文后直接更新，不再需要刷新页面；翻译后重新提取也仍能拿到原文；
+7. **对照表闭环**：新增 `text-table.js`，支持导出全部/已翻译、修改后导入、`暂无` 清理；
+8. **清除与单独加载**：清除页面译文后可恢复原文；词库行的“加载”可以只启用一个词库。
 
 ## 8. 扩展指南
 
 - **加面板按钮**：改 `panel-template.js` 加 `data-act`，在 `panel.js` 的 `switch` 里调用 `app` 方法；
 - **加业务动作**：在 `app.js` 里实现并返回一段提示文字，面板会自动显示；
 - **加词库字段**：改 `dictionary.js` 与 `export-builders.js`；
-- **加导出格式**：在 `export-builders.js` 加纯函数，在 `exporters.js` 里下载；
+- **加导出格式**：在 `export-builders.js` / `text-table.js` 加纯函数，在 `exporters.js` 里下载；
+- **改对照表列名 / 暂无占位**：改 `constants.js` 的 `TABLE_HEADER`、`TABLE_EMPTY`；
 - **加提取规则**：改 `constants.js` 的正则或 `dom-utils.js` 的判断；
 - **改选区高亮阈值**：改 `constants.js` 的 `SELECTION_FULL_HIGHLIGHT_MAX`（默认 2）；
 - **加新模块**：新建 `src/xxx.js` 注册工厂 → 加进 `manifest.json` 的 `js` 数组（顺序即加载顺序）→ 在 `content.js` 装配；测试会自动检查 `src/` 下所有文件都已登记。

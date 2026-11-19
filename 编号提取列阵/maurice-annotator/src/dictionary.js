@@ -40,7 +40,8 @@
                 };
             }
             if (!store.state.activeDicts.includes(constants.CUSTOM_DICT_NAME)) {
-                store.state.activeDicts.push(constants.CUSTOM_DICT_NAME);
+                // custom 放在最前面（优先级最低），后导入的词库可以覆盖它
+                store.state.activeDicts.unshift(constants.CUSTOM_DICT_NAME);
             }
         }
 
@@ -140,6 +141,114 @@
             await store.saveDicts();
         }
 
+        /** 只启用某一个词库（“单独加载”按钮用） */
+        async function setOnly(name) {
+            if (!store.state.dicts[name]) {
+                throw new Error(`找不到词库「${name}」`);
+            }
+            store.state.activeDicts = [name];
+            await store.saveDicts();
+        }
+
+        function ensureTableDict() {
+            const name = constants.TABLE_DICT_NAME;
+            if (!store.state.dicts[name]) {
+                store.state.dicts[name] = {
+                    name,
+                    description: constants.TABLE_DICT_DESCRIPTION,
+                    global: {},
+                    perPage: {}
+                };
+            }
+            const table = store.state.dicts[name];
+            if (!table.global) table.global = {};
+            if (!table.perPage) table.perPage = {};
+            return table;
+        }
+
+        function pageIdFromTextId(textId) {
+            const match = /^(P\d+)-\d+$/i.exec(String(textId || '').trim());
+            return match ? match[1].toUpperCase() : null;
+        }
+
+        /**
+         * 导入可编辑对照表（原文 / 编号 / 译文）。
+         * 译文写进独立的“导入对照表”词库，并把它放到启用列表最后，
+         * 这样表格里的修改优先级最高，导入后能覆盖旧译文。
+         * @param {Array<{text:string, id?:string, pageId?:string, translation:string}>} rows
+         */
+        async function applyTable(rows) {
+            const tableName = constants.TABLE_DICT_NAME;
+            const table = ensureTableDict();
+
+            const allTexts = new Set();
+            const translatedByText = new Map();
+            const translatedByTextPage = new Map();
+            const seenTextPage = new Set();
+
+            let updated = 0;
+            let skipped = 0;
+
+            for (const row of rows || []) {
+                const text = String(row.text == null ? '' : row.text);
+                if (!text.trim()) {
+                    skipped++;
+                    continue;
+                }
+
+                const pageId = row.pageId || pageIdFromTextId(row.id);
+                const value = String(row.translation == null ? '' : row.translation).trim();
+
+                allTexts.add(text);
+                if (pageId) seenTextPage.add(text + '\u0000' + pageId);
+
+                if (!value || value === constants.TABLE_EMPTY) {
+                    skipped++;
+                    continue;
+                }
+
+                translatedByText.set(text, value);
+                if (pageId) {
+                    translatedByTextPage.set(text + '\u0000' + pageId, { text, pageId, value });
+                }
+                updated++;
+            }
+
+            // 全局译文：同一原文以最后一条有效译文为准；全是“暂无”就删掉
+            for (const text of allTexts) {
+                const value = translatedByText.get(text);
+                if (value === undefined) {
+                    delete table.global[text];
+                    for (const pageId of Object.keys(table.perPage)) {
+                        delete table.perPage[pageId][text];
+                    }
+                } else {
+                    table.global[text] = value;
+                }
+            }
+
+            // 本页译文：保证表格里的值在该页优先级最高
+            for (const key of seenTextPage) {
+                const [text, pageId] = key.split('\u0000');
+                const entry = translatedByTextPage.get(key);
+                if (entry) {
+                    if (!table.perPage[pageId]) table.perPage[pageId] = {};
+                    table.perPage[pageId][text] = entry.value;
+                } else if (table.perPage[pageId]) {
+                    delete table.perPage[pageId][text];
+                }
+            }
+
+            // 放到启用列表最后：越靠后优先级越高
+            const active = store.state.activeDicts;
+            const existing = active.indexOf(tableName);
+            if (existing !== -1) active.splice(existing, 1);
+            active.push(tableName);
+
+            await store.saveDicts();
+            return { updated, skipped, total: (rows || []).length, dictName: tableName };
+        }
+
         /** 删除词库（custom 不允许删） */
         async function remove(name) {
             if (name === constants.CUSTOM_DICT_NAME) return false;
@@ -152,11 +261,13 @@
 
         function countWords(dict) {
             if (!dict) return 0;
-            let count = Object.keys(dict.global || {}).length;
+            const words = new Set(Object.keys(dict.global || {}));
             for (const pageId of Object.keys(dict.perPage || {})) {
-                count += Object.keys(dict.perPage[pageId] || {}).length;
+                for (const word of Object.keys(dict.perPage[pageId] || {})) {
+                    words.add(word);
+                }
             }
-            return count;
+            return words.size;
         }
 
         /** 面板列表用的只读视图 */
@@ -217,6 +328,8 @@
             saveTranslation,
             importData,
             setEnabled,
+            setOnly,
+            applyTable,
             remove,
             countWords,
             list,

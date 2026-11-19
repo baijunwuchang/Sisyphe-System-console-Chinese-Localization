@@ -77,6 +77,12 @@
 
         function bindEvents() {
             panelEl.addEventListener('click', (event) => {
+                const loadButton = event.target.closest('[data-dict-load]');
+                if (loadButton) {
+                    run(() => app.loadDictAlone(loadButton.dataset.dictLoad));
+                    return;
+                }
+
                 const exportButton = event.target.closest('[data-dict-export]');
                 if (exportButton) {
                     run(() => app.exportDict(exportButton.dataset.dictExport));
@@ -114,6 +120,9 @@
                     case 'apply-all':
                         run(() => app.applyAll());
                         break;
+                    case 'clear-translated':
+                        run(() => app.clearPageTranslations());
+                        break;
                     case 'find':
                         run(doFind);
                         break;
@@ -141,17 +150,23 @@
                     case 'import-dict':
                         query('[data-el="file"]').click();
                         break;
+                    case 'import-table':
+                        query('[data-el="file"]').click();
+                        break;
                     case 'export-all-dicts':
                         run(() => app.exportMerged());
                         break;
                     case 'export-pending':
                         run(() => app.exportPending());
                         break;
+                    case 'export-table':
+                        run(() => app.exportTable());
+                        break;
+                    case 'export-translated':
+                        run(() => app.exportTranslated());
+                        break;
                     case 'export-json':
                         run(() => app.exportAll('json'));
-                        break;
-                    case 'export-tsv':
-                        run(() => app.exportAll('tsv'));
                         break;
                     default:
                         break;
@@ -234,7 +249,8 @@
           ${html.escapeHtml(dict.label)}${description}
         </span>
         <span style="color:#f59e0b;font-size:10px;white-space:nowrap;">${dict.count}词</span>
-        <button data-dict-export="${html.escapeAttr(dict.name)}" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:10px;">导出</button>
+        <button data-dict-load="${html.escapeAttr(dict.name)}" title="只启用这个词库并立即应用，其他词库会暂时取消" style="background:none;border:none;color:#34d399;cursor:pointer;font-size:10px;">加载</button>
+        <button data-dict-export="${html.escapeAttr(dict.name)}" title="导出这个词库" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:10px;">导出</button>
         ${deleteButton}
       </div>`;
                 })

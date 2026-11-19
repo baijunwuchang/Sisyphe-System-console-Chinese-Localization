@@ -14,9 +14,10 @@
      * @param {object} deps.translator
      * @param {object} deps.transfer
      * @param {object} deps.builders
+     * @param {object} deps.textTable
      * @param {object} deps.constants
      */
-    function createExporters({ store, dictionary, translator, transfer, builders, constants }) {
+    function createExporters({ store, dictionary, translator, transfer, builders, textTable, constants }) {
         const names = constants.EXPORT_FILENAMES;
 
         function lookup(text, pageId) {
@@ -32,7 +33,7 @@
             return filename;
         }
 
-        /** 导出所有页面的文本 + 译文（json / tsv，不是词库，不能导入） */
+        /** 旧的 JSON / TSV 备份格式（不是可编辑对照表） */
         async function exportAll(kind) {
             await store.load();
             const pages = store.state.pages;
@@ -46,6 +47,31 @@
             const content = builders.buildTextsTsv({ pages, lookup });
             transfer.downloadFile(content, names.textsTsv, 'text/tab-separated-values');
             return names.textsTsv;
+        }
+
+        /**
+         * 导出可编辑对照表：原文 / 编号 / 译文，未翻译写“暂无”。
+         * 改完可以直接用“导入对照表”导回来。
+         */
+        async function exportTable() {
+            await store.load();
+            const content = textTable.buildAll({
+                pages: store.state.pages,
+                lookup
+            });
+            transfer.downloadFile(content, names.table, 'text/tab-separated-values');
+            return names.table;
+        }
+
+        /** 只导出已经有译文的文本 */
+        async function exportTranslated() {
+            await store.load();
+            const content = textTable.buildTranslated({
+                pages: store.state.pages,
+                lookup
+            });
+            transfer.downloadFile(content, names.translatedTable, 'text/tab-separated-values');
+            return names.translatedTable;
         }
 
         /** 导出所有还没翻译的条目，供人工填写后重新导入 */
@@ -84,7 +110,7 @@
             );
         }
 
-        return { exportAll, exportPending, exportMerged, exportSingleDict };
+        return { exportAll, exportTable, exportTranslated, exportPending, exportMerged, exportSingleDict };
     }
 
     global.Maurice = global.Maurice || {};

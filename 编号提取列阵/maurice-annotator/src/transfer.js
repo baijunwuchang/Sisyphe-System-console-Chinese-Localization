@@ -30,9 +30,27 @@
             setTimeout(() => urlApi.revokeObjectURL(url), 3000);
         }
 
-        /** 读取 <input type="file"> 选中的 JSON 文件 */
+        /**
+         * 读取文本文件，兼容 UTF-8 与带 BOM 的 UTF-16（Excel 另存为 Unicode 文本时常见）。
+         */
+        async function readTextFile(file) {
+            if (file && typeof file.arrayBuffer === 'function') {
+                const buffer = await file.arrayBuffer();
+                const bytes = new Uint8Array(buffer);
+                if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+                    return new TextDecoder('utf-16le').decode(buffer);
+                }
+                if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+                    return new TextDecoder('utf-16be').decode(buffer);
+                }
+                return new TextDecoder('utf-8').decode(buffer);
+            }
+            return file.text();
+        }
+
+        /** 读取并解析 JSON 文件 */
         async function readJsonFile(file) {
-            const text = await file.text();
+            const text = await readTextFile(file);
             try {
                 return JSON.parse(text);
             } catch (_) {
@@ -45,7 +63,7 @@
             return String(name).replace(/[\\/:*?"<>|]/g, '_');
         }
 
-        return { downloadFile, readJsonFile, sanitizeFilename };
+        return { downloadFile, readTextFile, readJsonFile, sanitizeFilename };
     }
 
     global.Maurice = global.Maurice || {};

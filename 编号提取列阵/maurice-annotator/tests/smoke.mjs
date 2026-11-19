@@ -514,7 +514,170 @@ try {
         throw new Error('词库列表没有显示 / 启用导入的词库');
     }
 
-    // 5. 截图（等选区高亮 4 秒自动消失，截图干净一些）
+    // 7. 导入可编辑对照表：修改已有译文应原地生效
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            const tsv = [
+                '原文\\t编号\\t译文',
+                '파일\\tP1-1\\t档案',
+                '편집\\tP1-1\\t编辑',
+                '보기\\tP1-1\\t视图'
+            ].join('\\n');
+            const file = new File([tsv], '对照表.tsv', {
+                type: 'text/tab-separated-values'
+            });
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            const input = panel.querySelector('[data-el="file"]');
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        })()
+    `);
+
+    const tableImportResult = await poll('对照表导入完成', async () => {
+        const text = await getPanelResult();
+        return text.includes('对照表导入成功') ? text : '';
+    }, 30000);
+
+    const updatedTranslation = await evaluate(`
+        (() => {
+            const bodyText = document.body.innerText;
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            return {
+                hasArchive: bodyText.includes('档案'),
+                hasFile: bodyText.includes('文件'),
+                tableListed: panel.innerText.includes('导入对照表')
+            };
+        })()
+    `);
+
+    console.log('对照表导入:', tableImportResult.replace(/\n/g, ' / '));
+    console.log('修改后页面:', JSON.stringify(updatedTranslation));
+    if (!updatedTranslation.hasArchive || updatedTranslation.hasFile) {
+        throw new Error('导入对照表后，页面译文没有原地更新为“档案”');
+    }
+    if (!updatedTranslation.tableListed) {
+        throw new Error('词库列表没有出现“导入对照表”');
+    }
+
+    // 8. 清除页面译文 → 恢复原文；再应用 → 恢复表格译文
+    await clickPanelButton('清除译文');
+    const cleared = await poll('清除页面译文', async () => {
+        const text = await getPanelResult();
+        if (!text.includes('已清除')) return '';
+        return evaluate(`
+            (() => {
+                const bodyText = document.body.innerText;
+                return {
+                    hasKorean: bodyText.includes('파일'),
+                    hasArchive: bodyText.includes('档案'),
+                    hasFile: bodyText.includes('文件')
+                };
+            })()
+        `);
+    }, 15000);
+
+    console.log('清除页面译文:', JSON.stringify(cleared));
+    if (!cleared.hasKorean || cleared.hasArchive || cleared.hasFile) {
+        throw new Error('“清除译文”没有把页面恢复成原文');
+    }
+
+    await clickPanelButton('应用翻译');
+    const reapplied = await poll('重新应用翻译', async () => {
+        const text = await getPanelResult();
+        return text.includes('更新了') ? text : '';
+    }, 15000);
+    const hasArchiveAgain = await evaluate(`document.body.innerText.includes('档案')`);
+    if (!hasArchiveAgain) throw new Error('清除后重新应用，没有恢复对照表译文');
+    console.log('重新应用:', reapplied.replace(/\n/g, ' / '));
+
+    // 9. 单独加载 smoke-demo 词库
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            const button = panel.querySelector('[data-dict-load="smoke-demo"]');
+            if (!button) return false;
+            button.click();
+            return true;
+        })()
+    `);
+
+    const aloneResult = await poll('单独加载词库', async () => {
+        const text = await getPanelResult();
+        return text.includes('单独加载') ? text : '';
+    }, 15000);
+
+    const aloneState = await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            const bodyText = document.body.innerText;
+            const smoke = panel.querySelector('[data-dict-toggle="smoke-demo"]');
+            const table = panel.querySelector('[data-dict-toggle="导入对照表"]');
+            return {
+                smokeChecked: smoke ? smoke.checked : false,
+                tableChecked: table ? table.checked : false,
+                hasFile: bodyText.includes('文件'),
+                hasArchive: bodyText.includes('档案')
+            };
+        })()
+    `);
+
+    console.log('单独加载:', aloneResult.replace(/\n/g, ' / '), JSON.stringify(aloneState));
+    if (!aloneState.smokeChecked || aloneState.tableChecked) {
+        throw new Error('“加载”没有把其他词库取消勾选');
+    }
+    if (!aloneState.hasFile || aloneState.hasArchive) {
+        throw new Error('单独加载 smoke-demo 后页面译文不正确');
+    }
+
+    // 译文生效后再提取一次，应仍然拿到原文（而不是中文）
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-el="result"]').textContent = '';
+            return true;
+        })()
+    `);
+    await clickPanelButton('提取并保存');
+    const reExtractResult = await poll('翻译后重新提取', async () => {
+        const text = await getPanelResult();
+        return text.includes('共提取') ? text : '';
+    }, 60000);
+    const reExtractCount = Number((/共提取 (\d+)/.exec(reExtractResult) || [])[1] || 0);
+    console.log('翻译后重新提取:', reExtractResult.replace(/\n/g, ' / '));
+    if (reExtractCount < 100) {
+        throw new Error('页面已翻译后重新提取，丢失了大部分原文（只拿到 ' + reExtractCount + ' 条）');
+    }
+
+    // 10. 导出全部对照表 / 导出已翻译
+    await clickPanelButton('导出全部（可编辑）');
+    const tableExport = await poll('导出全部对照表', async () => {
+        const text = await getPanelResult();
+        return text.includes('已导出对照表') ? text : '';
+    }, 15000);
+
+    await clickPanelButton('导出已翻译');
+    const translatedExport = await poll('导出已翻译', async () => {
+        const text = await getPanelResult();
+        return text.includes('已导出已翻译文本') ? text : '';
+    }, 15000);
+
+    console.log('导出对照表:', tableExport.replace(/\n/g, ' / '));
+    console.log('导出已翻译:', translatedExport.replace(/\n/g, ' / '));
+
+    // 11. 截图（等选区高亮 4 秒自动消失，截图干净一些）
     await sleep(4500);
     const screenshot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
