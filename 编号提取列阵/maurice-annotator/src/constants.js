@@ -46,6 +46,20 @@
         DICT_FORMAT: 'maurice-dict',
         DICT_FORMAT_VERSION: '1.0',
 
+        /**
+         * 导出文件名。词库类文件（待翻译 / 合并 / 单个词库）可以再次导入，
+         * 所以固定用中文名；文本对照文件不是词库，保留原英文名避免误导入。
+         */
+        EXPORT_FILENAMES: Object.freeze({
+            textsJson: 'maurice_texts.json',
+            textsTsv: 'maurice_texts.tsv',
+            pendingDict: '待翻译词库.json',
+            mergedDict: '合并词库.json',
+            dictPrefix: '词库_',
+            dictSuffix: '.json',
+            customDictBase: '自定义'
+        }),
+
         /** 编号格式：P<页号>-<文本序号>，例如 P1-42 */
         ID_PATTERN: /^(P\d+)-(\d+)$/i,
         PAGE_ID_PREFIX: 'P',

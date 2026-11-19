@@ -7,6 +7,8 @@
 1. **把原来的单文件 `content.js` 拆成 17 个职责单一的模块**，改由 `content.js` 统一装配；
 2. **移除面板里的分页显示与管理控件**，但保留 `P1-42` 这样的编号格式。
 
+> 想逐个文件看“写了什么、负责什么、依赖谁”，见 [文件说明.md](文件说明.md)。
+
 ---
 
 ## 1. 目录结构
@@ -16,6 +18,8 @@ maurice-annotator/
 ├─ manifest.json            MV3 清单：模块加载顺序
 ├─ background.js            点图标转发消息；必要时按 manifest 补注入
 ├─ content.js               启动入口：只负责装配依赖
+├─ README.md                总说明
+├─ 文件说明.md              逐文件说明
 ├─ src/
 │  ├─ constants.js          常量 / 选择器 / 颜色 / 编号格式
 │  ├─ html.js               HTML 转义
@@ -35,7 +39,7 @@ maurice-annotator/
 │  ├─ panel-template.js     面板 HTML 模板
 │  └─ panel.js              面板 DOM 与事件绑定
 └─ tests/
-   ├─ run-tests.mjs         Node 纯逻辑测试（27 项）
+   ├─ run-tests.mjs         Node 纯逻辑测试（28 项）
    └─ smoke.mjs             Chrome headless 端到端冒烟测试
 ```
 
@@ -167,6 +171,14 @@ activeDicts ["custom", ...]
 - **查找**：输入 `P1-42` 定位并高亮；
 - **存全局 / 存当前页**：写进 `custom` 词库；
 - **导入文件 / 导出**：词库与文本导出。
+
+导出的词库文件使用中文名，可直接再次导入：
+
+- `待翻译词库.json`
+- `合并词库.json`
+- `词库_<词库名>.json`（`custom` 导出为 `词库_自定义.json`）
+
+`maurice_texts.json` / `maurice_texts.tsv` 是文本对照数据，不是词库，不能导入。
 
 ## 6. 测试
 

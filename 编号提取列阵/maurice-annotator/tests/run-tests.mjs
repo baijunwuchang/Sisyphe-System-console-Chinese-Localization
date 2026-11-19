@@ -458,6 +458,56 @@ await test('合并词库：后启用的覆盖先启用的', () => {
     assert.equal(payload.description, '合并了 2 个词库');
 });
 
+await test('可再次导入的词库文件使用中文文件名', async () => {
+    const downloads = [];
+    const fakeTransfer = {
+        downloadFile(content, filename, mime) {
+            downloads.push({ filename, mime });
+        },
+        sanitizeFilename(name) {
+            return String(name).replace(/[\\/:*?"<>|]/g, '_');
+        }
+    };
+    const fakeStore = {
+        state: { pages: {} },
+        async load() {}
+    };
+    const fakeDictionary = {
+        all: () => ({}),
+        activeNames: () => [],
+        toPayload: (name) => ({
+            format: 'maurice-dict',
+            version: '1.0',
+            name,
+            global: {},
+            perPage: {}
+        })
+    };
+    const fakeTranslator = { lookup: () => null };
+
+    const exporters = M.createExporters({
+        store: fakeStore,
+        dictionary: fakeDictionary,
+        translator: fakeTranslator,
+        transfer: fakeTransfer,
+        builders,
+        constants
+    });
+
+    assert.equal(await exporters.exportPending(), '待翻译词库.json');
+    assert.equal(await exporters.exportMerged(), '合并词库.json');
+    assert.equal(await exporters.exportSingleDict('测试词库'), '词库_测试词库.json');
+    assert.equal(await exporters.exportSingleDict('custom'), '词库_自定义.json');
+    assert.equal(await exporters.exportSingleDict('a/b'), '词库_a_b.json');
+    assert.equal(await exporters.exportAll('json'), 'maurice_texts.json');
+    assert.equal(await exporters.exportAll('tsv'), 'maurice_texts.tsv');
+
+    assert.equal(downloads.length, 7);
+    assert.equal(downloads[0].filename, '待翻译词库.json');
+    assert.equal(downloads[1].filename, '合并词库.json');
+    assert.match(downloads[2].mime, /json/);
+});
+
 /* ------------------------------------------------------------------ */
 /* 8. 分页移除 / 文件清单                                              */
 /* ------------------------------------------------------------------ */

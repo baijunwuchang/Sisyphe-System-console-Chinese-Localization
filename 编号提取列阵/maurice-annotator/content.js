@@ -78,7 +78,8 @@
         dictionary,
         translator,
         transfer,
-        builders
+        builders,
+        constants
     });
 
     const app = M.createApp({
