@@ -19,6 +19,7 @@
      * @param {object} deps.finder
      * @param {object} deps.exporters
      * @param {object} deps.transfer
+     * @param {object} deps.selection 选区服务
      */
     function createApp({
         session,
@@ -30,7 +31,8 @@
         badges,
         finder,
         exporters,
-        transfer
+        transfer,
+        selection
     }) {
         /** 当前页的提取结果（含 DOM 引用，仅内存） */
         let annotations = [];
@@ -193,10 +195,14 @@
 
         async function find(query) {
             await init();
-            const result = await finder.find(query, {
-                pageId: session.pageId,
-                getAnnotations: ensureAnnotations
-            });
+
+            const queryText = String(query == null ? '' : query).trim();
+            const result = queryText
+                ? await finder.find(queryText, {
+                    pageId: session.pageId,
+                    getAnnotations: ensureAnnotations
+                })
+                : await finder.findSelection({ getAnnotations: ensureAnnotations });
 
             if (result.annotation) {
                 return {
@@ -205,7 +211,21 @@
                     translation: finder.translationFor(result.annotation, session.pageId)
                 };
             }
+
+            // 超过 2 段时没有单一原文可编辑，清空输入框避免残留上一条
+            if (result.type === 'selection-range') {
+                return { ...result, source: '', translation: '' };
+            }
+
             return result;
+        }
+
+        function hasSelection() {
+            return !!(selection && selection.hasSelection());
+        }
+
+        function clearSelection() {
+            if (selection) selection.clear();
         }
 
         // ===== 标注 =====
@@ -259,6 +279,8 @@
             extract,
             applyAll,
             find,
+            hasSelection,
+            clearSelection,
             saveTranslation,
             deleteTranslation,
             toggleDict,

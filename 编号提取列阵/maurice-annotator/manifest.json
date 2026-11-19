@@ -20,6 +20,7 @@
         "src/translator.js",
         "src/extractor.js",
         "src/badge-layer.js",
+        "src/selection.js",
         "src/finder.js",
         "src/export-builders.js",
         "src/transfer.js",

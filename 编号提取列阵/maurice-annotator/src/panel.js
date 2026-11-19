@@ -26,6 +26,7 @@
             if (panelEl) return panelEl;
 
             panelEl = document.createElement('div');
+            panelEl.setAttribute('data-maurice-panel', '1');
             Object.assign(panelEl.style, {
                 position: 'fixed',
                 right: '16px',
@@ -173,10 +174,21 @@
             });
 
             const queryInput = panelEl.querySelector('[data-el="q"]');
+            queryInput.addEventListener('input', () => {
+                // 用户开始输编号时，放弃页面上残留的选区
+                app.clearSelection();
+            });
             queryInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
                     run(doFind);
+                }
+            });
+
+            // 在页面上选中新文本后，清空查找框，让“查找”按选区走
+            document.addEventListener('selectionchange', () => {
+                if (queryInput.value && app.hasSelection()) {
+                    queryInput.value = '';
                 }
             });
 

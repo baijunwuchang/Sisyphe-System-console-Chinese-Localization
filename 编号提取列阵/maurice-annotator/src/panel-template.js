@@ -32,8 +32,8 @@
         </div>
 
         <div style="${row}">
-          <input data-el="q" placeholder="输入编号查词，比如 P1-42" style="flex:1;background:#111;border:1px solid #444;color:#eee;padding:6px 8px;border-radius:4px;font-family:monospace;" />
-          <button data-act="find" style="padding:6px 12px;background:#10b981;color:#fff;border:none;border-radius:4px;cursor:pointer;">查找</button>
+          <input data-el="q" placeholder="输入编号（如 P1-42）或选中文本后留空查找" title="输入框留空时，按页面选区查找编号" style="flex:1;background:#111;border:1px solid #444;color:#eee;padding:6px 8px;border-radius:4px;font-family:monospace;" />
+          <button data-act="find" title="输入框留空时，按页面选区查找编号" style="padding:6px 12px;background:#10b981;color:#fff;border:none;border-radius:4px;cursor:pointer;">查找</button>
         </div>
 
         <div data-el="result" style="margin-bottom:8px;padding:8px;background:#111;border-radius:4px;min-height:36px;color:#aaa;white-space:pre-wrap;font-size:11px;line-height:1.5;"></div>

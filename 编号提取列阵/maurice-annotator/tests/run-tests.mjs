@@ -389,6 +389,110 @@ await test('当前页命中 / 隐藏文本 / 跨页记录', async () => {
     assert.equal(missing.ok, false);
 });
 
+await test('选区查找：1～2 条标注时高亮完整文本', async () => {
+    const first = { id: 'P1-1', pageId: 'P1', textId: 1, type: 'ui', text: 'Hello world', node: {} };
+    const second = { id: 'P1-2', pageId: 'P1', textId: 2, type: 'ui', text: 'Second text', node: {} };
+
+    let matchCount = 1;
+    const selection = {
+        getCurrent: () => ({ range: { tag: 'range' }, text: 'Hello' }),
+        matchAnnotations: (range, list) => list.slice(0, matchCount)
+    };
+    const calls = { nodes: 0, range: 0, last: null };
+    const badges = {
+        highlight: () => true,
+        highlightNodes: (nodes) => {
+            calls.nodes++;
+            calls.last = nodes;
+            return true;
+        },
+        highlightRange: () => {
+            calls.range++;
+            return true;
+        }
+    };
+    const finder = M.createFinder({ store: null, constants, badges, selection });
+
+    let result = await finder.findSelection({ getAnnotations: () => [first, second] });
+    assert.equal(result.ok, true);
+    assert.equal(result.annotation, first);
+    assert.match(result.message, /属于 P1-1/);
+    assert.match(result.message, /完整本段/);
+    assert.equal(calls.nodes, 1);
+    assert.equal(calls.range, 0);
+
+    matchCount = 2;
+    result = await finder.findSelection({ getAnnotations: () => [first, second] });
+    assert.equal(result.ok, true);
+    assert.match(result.message, /涉及 2 条编号：P1-1、P1-2/);
+    assert.match(result.message, /完整两段/);
+    assert.equal(calls.nodes, 2);
+    assert.equal(calls.last.length, 2);
+    assert.equal(calls.range, 0);
+});
+
+await test('选区查找：超过 2 条标注时只高亮选区', async () => {
+    const items = [
+        { id: 'P1-1', pageId: 'P1', textId: 1, type: 'ui', text: 'Alpha', node: {} },
+        { id: 'P1-2', pageId: 'P1', textId: 2, type: 'ui', text: 'Beta', node: {} },
+        { id: 'P1-3', pageId: 'P1', textId: 3, type: 'ui', text: 'Gamma', node: {} }
+    ];
+    const selection = {
+        getCurrent: () => ({ range: { tag: 'range' }, text: 'Alpha Beta Gamma' }),
+        matchAnnotations: () => items
+    };
+    const calls = { nodes: 0, range: 0 };
+    const badges = {
+        highlight: () => true,
+        highlightNodes: () => {
+            calls.nodes++;
+            return true;
+        },
+        highlightRange: () => {
+            calls.range++;
+            return true;
+        }
+    };
+    const finder = M.createFinder({ store: null, constants, badges, selection });
+
+    const result = await finder.findSelection({ getAnnotations: () => items });
+    assert.equal(result.ok, true);
+    assert.equal(result.type, 'selection-range');
+    assert.match(result.message, /3 条编号/);
+    assert.match(result.message, /只高亮/);
+    assert.equal(result.annotation, undefined);
+    assert.equal(calls.nodes, 0);
+    assert.equal(calls.range, 1);
+});
+
+await test('选区查找：无选区 / 未提取 / 无匹配时的提示', async () => {
+    let current = null;
+    const selection = {
+        getCurrent: () => current,
+        matchAnnotations: () => []
+    };
+    const badges = {
+        highlight: () => true,
+        highlightNodes: () => true,
+        highlightRange: () => true
+    };
+    const finder = M.createFinder({ store: null, constants, badges, selection });
+    const annotation = { id: 'P1-1', pageId: 'P1', textId: 1, type: 'ui', text: 'Hello', node: {} };
+
+    let result = await finder.findSelection({ getAnnotations: () => [annotation] });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /先在页面/);
+
+    current = { range: { tag: 'range' }, text: 'zzz' };
+    result = await finder.findSelection({ getAnnotations: () => [] });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /还没有提取/);
+
+    result = await finder.findSelection({ getAnnotations: () => [annotation] });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /没有对应/);
+});
+
 /* ------------------------------------------------------------------ */
 /* 7. 导出构建（纯函数）                                               */
 /* ------------------------------------------------------------------ */

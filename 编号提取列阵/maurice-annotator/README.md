@@ -2,10 +2,11 @@
 
 对 `https://lell1203.github.io/maurice_simul/` 的汉化辅助扩展：按 **F1** 打开面板，提取页面文本、按编号标注、维护词库，并把译文实时写回页面。
 
-这一版做了两件事：
+这一版做了三件事：
 
-1. **把原来的单文件 `content.js` 拆成 17 个职责单一的模块**，改由 `content.js` 统一装配；
-2. **移除面板里的分页显示与管理控件**，但保留 `P1-42` 这样的编号格式。
+1. **把原来的单文件 `content.js` 拆成 18 个职责单一的模块**，改由 `content.js` 统一装配；
+2. **移除面板里的分页显示与管理控件**，但保留 `P1-42` 这样的编号格式；
+3. **新增选区查找**：在页面上选中文本后点“查找”，直接定位它属于哪个编号，并按选区范围决定高亮整段还是只高亮选中部分。
 
 > 想逐个文件看“写了什么、负责什么、依赖谁”，见 [文件说明.md](文件说明.md)。
 
@@ -31,7 +32,8 @@ maurice-annotator/
 │  ├─ translator.js         查词、替换文本、监听动态内容
 │  ├─ extractor.js          扫描页面并生成 P?-?? 标注
 │  ├─ badge-layer.js        页面徽标与高亮框
-│  ├─ finder.js             按编号查词
+│  ├─ selection.js          文本选区捕获与选区 → 标注映射
+│  ├─ finder.js             按编号 / 按选区查词
 │  ├─ export-builders.js    导出内容构造（纯函数）
 │  ├─ transfer.js           下载文件 / 读取 JSON 文件
 │  ├─ exporters.js          导出流程编排
@@ -39,7 +41,7 @@ maurice-annotator/
 │  ├─ panel-template.js     面板 HTML 模板
 │  └─ panel.js              面板 DOM 与事件绑定
 └─ tests/
-   ├─ run-tests.mjs         Node 纯逻辑测试（28 项）
+   ├─ run-tests.mjs         Node 纯逻辑测试（31 项）
    └─ smoke.mjs             Chrome headless 端到端冒烟测试
 ```
 
@@ -61,7 +63,9 @@ const patternEngine = M.createPatternEngine();
 const translator = M.createTranslator({ dictionary, patternEngine, domUtils, getPageId });
 const extractor = M.createExtractor({ domUtils, constants });
 const badges = M.createBadgeLayer({ domUtils, constants, onBadgeClick });
-const finder = M.createFinder({ store, constants, badges, translator });
+const selection = M.createSelectionService({ constants });
+selection.install();
+const finder = M.createFinder({ store, constants, badges, translator, selection });
 const exporters = M.createExporters({ store, dictionary, translator, transfer, builders });
 const app = M.createApp({ ... });
 const panel = M.createPanel({ app, constants, html, template: M.panelTemplate });
@@ -110,7 +114,8 @@ MV3 的 `content_scripts` 不支持静态 `type: "module"`。为了保持“拖�
 | `translator` | 替换与动态监听 | 词库编辑、面板 |
 | `extractor` | 扫描 + 编号 | 保存、渲染 |
 | `badge-layer` | 画徽标 / 高亮 | 业务消息 |
-| `finder` | 查编号 | 面板布局 |
+| `selection` | 捕获选区、匹配标注节点 | 词库、面板 |
+| `finder` | 按编号 / 按选区查词 | 面板布局 |
 | `export-builders` | 纯数据 → 字符串 | 下载 |
 | `exporters` | 导出流程 | 面板 |
 | `app` | 组合动作、会话状态 | DOM / HTML |
@@ -168,7 +173,10 @@ activeDicts ["custom", ...]
 - **提取并保存**：扫描当前页含韩文 / 英文的文本，生成 `P?-??` 编号并画出徽标（隐藏文本也会记录，但不画）；
 - **显示标注 / 取消标注**：控制徽标；
 - **应用翻译**：把已启用词库写回当前页面；
-- **查找**：输入 `P1-42` 定位并高亮；
+- **查找**：输入 `P1-42` 定位；或先在页面选中文本（左键拖动或右键拖动都可以），保持输入框留空，点“查找”：
+  - 选区落在 1 条标注里：显示所属编号，并高亮**完整本段**文本；
+  - 选区覆盖 2 条标注：高亮这 2 段完整文本，并列出两个编号；
+  - 选区覆盖超过 2 条标注：只高亮**选中的那部分**，并列出涉及的编号；
 - **存全局 / 存当前页**：写进 `custom` 词库；
 - **导入文件 / 导出**：词库与文本导出。
 
@@ -188,7 +196,7 @@ activeDicts ["custom", ...]
 node tests\run-tests.mjs
 ```
 
-覆盖：文本清洗、HTML 转义、动态数字规则、词库优先级、页号分配、翻译查找、查词、JSON/TSV/未翻译/合并导出，以及“面板不再含分页控件、manifest 文件齐全”。
+覆盖：文本清洗、HTML 转义、动态数字规则、词库优先级、页号分配、翻译查找、编号查词、选区查词（1 段 / 2 段 / 多段 / 无匹配）、JSON/TSV/未翻译/合并导出、中文词库文件名，以及“面板不再含分页控件、manifest 文件齐全”。
 
 ### 端到端冒烟测试
 
@@ -201,19 +209,23 @@ node tests\smoke.mjs
 
 1. 按 F1 打开面板，确认没有“新页号 / 抓取过的页面”；
 2. 点“提取并保存”，确认有徽标；
-3. 通过文件输入导入一个测试词库，确认页面出现译文、词库列表已启用；
-4. 截图到 `tests/screenshots/smoke.png`。
+3. 选中一段文本的一部分，点“查找”，确认返回编号并高亮完整段落；
+4. 用右键拖动选中测试文本，确认同样能定位；
+5. 选中 3 段文本，确认只高亮选中的部分并列出 3 个编号；
+6. 通过文件输入导入一个测试词库，确认页面出现译文、词库列表已启用；
+7. 截图到 `tests/screenshots/smoke.png`。
 
-由于 Chrome 137+ 的品牌版移除了 `--load-extension`，冒烟测试需要 **Chrome for Testing** 或 Chromium。本地验证结果：一次提取约 770 条文本、180+ 个徽标，导入词库后成功替换页面文本。
+由于 Chrome 137+ 的品牌版移除了 `--load-extension`，冒烟测试需要 **Chrome for Testing** 或 Chromium；本机 **Microsoft Edge 156** 仍接受该参数，实测同样可以跑。验证结果：一次提取约 770 条文本、180+ 个徽标；部分选中定位到编号并高亮完整段落；右键拖动选中 `BetaTwo` 定位到对应编号；选中 3 段文本时只高亮选区并列出 3 个编号；导入词库后成功替换页面文本。
 
 ## 7. 与旧版的行为差异
 
-除分页界面外，基本保持原逻辑，额外修正了几个小问题：
+除分页界面和新增的选区查找外，基本保持原逻辑，额外修正了几个小问题：
 
 1. **徽标定位**：覆盖层是 `position: fixed`，坐标改用视口坐标，滚动后不会偏移（旧版会叠加 `scrollY`）；
 2. **页号防撞**：分配新页号前会扫描已有的 `P?`，避免 `pageCounter` 落后时生成重复编号；
 3. **动态规则优先级**：同样长度的正则，本页规则优先于全局规则（旧版排序不稳定）；
-4. **补注入**：`background.js` 改为从 `chrome.runtime.getManifest()` 读取模块清单，不再维护第二份文件列表。
+4. **补注入**：`background.js` 改为从 `chrome.runtime.getManifest()` 读取模块清单，不再维护第二份文件列表；
+5. **选区查找**：新增 `selection.js`，支持左右键选区、1～2 段高亮整段、超过 2 段只高亮选中部分。
 
 ## 8. 扩展指南
 
@@ -222,4 +234,5 @@ node tests\smoke.mjs
 - **加词库字段**：改 `dictionary.js` 与 `export-builders.js`；
 - **加导出格式**：在 `export-builders.js` 加纯函数，在 `exporters.js` 里下载；
 - **加提取规则**：改 `constants.js` 的正则或 `dom-utils.js` 的判断；
+- **改选区高亮阈值**：改 `constants.js` 的 `SELECTION_FULL_HIGHLIGHT_MAX`（默认 2）；
 - **加新模块**：新建 `src/xxx.js` 注册工厂 → 加进 `manifest.json` 的 `js` 数组（顺序即加载顺序）→ 在 `content.js` 装配；测试会自动检查 `src/` 下所有文件都已登记。

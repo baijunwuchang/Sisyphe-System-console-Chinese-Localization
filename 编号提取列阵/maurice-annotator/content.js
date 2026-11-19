@@ -24,6 +24,7 @@
         'createTranslator',
         'createExtractor',
         'createBadgeLayer',
+        'createSelectionService',
         'createFinder',
         'createExportBuilders',
         'createTransfer',
@@ -70,7 +71,10 @@
         }
     });
 
-    const finder = M.createFinder({ store, constants, badges, translator });
+    const selection = M.createSelectionService({ constants });
+    selection.install();
+
+    const finder = M.createFinder({ store, constants, badges, translator, selection });
     const builders = M.createExportBuilders({ constants });
 
     const exporters = M.createExporters({
@@ -92,7 +96,8 @@
         badges,
         finder,
         exporters,
-        transfer
+        transfer,
+        selection
     });
 
     // ---- 界面 ----

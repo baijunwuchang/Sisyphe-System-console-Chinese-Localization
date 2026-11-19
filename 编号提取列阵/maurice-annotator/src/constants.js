@@ -70,6 +70,8 @@
         TOGGLE_MESSAGE: 'toggle',
 
         // ---- 界面 ----
+        /** 面板根节点的标记 / 选择器（选区服务用它排除面板内部） */
+        PANEL_SELECTOR: '[data-maurice-panel]',
         PANEL_WIDTH_PX: 500,
         OVERLAY_Z_INDEX: '2147483646',
         PANEL_Z_INDEX: '2147483647',
@@ -81,6 +83,14 @@
         /** 向上查找祖先节点的最大层数 */
         MAX_ANCESTOR_DEPTH: 30,
         MAX_VISIBILITY_DEPTH: 40,
+
+        // ---- 选区查找 ----
+        /** 右键拖动超过这个像素才算“选中”而不是普通右键菜单 */
+        SELECTION_DRAG_THRESHOLD: 4,
+        /** 选区覆盖不超过这么多条标注时，高亮整段；超过则只高亮选中的部分 */
+        SELECTION_FULL_HIGHLIGHT_MAX: 2,
+        SELECTION_PREVIEW_LENGTH: 60,
+        SELECTION_ID_LIST_LIMIT: 8,
 
         COLORS: Object.freeze({
             badgeCode: '#e11d48',

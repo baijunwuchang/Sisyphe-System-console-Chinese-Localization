@@ -107,6 +107,33 @@ async function poll(description, fn, timeoutMs = 30000) {
     throw new Error(`等待超时：${description}（最后结果：${JSON.stringify(last)}）`);
 }
 
+async function clickPanelButton(label) {
+    return evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            if (!panel) return false;
+            const button = [...panel.querySelectorAll('button')]
+                .find((b) => b.textContent.trim() === ${JSON.stringify(label)});
+            if (!button) return false;
+            button.click();
+            return true;
+        })()
+    `);
+}
+
+async function getPanelResult() {
+    return evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            return panel ? panel.querySelector('[data-el="result"]').textContent : '';
+        })()
+    `);
+}
+
 async function closeChrome() {
     try {
         if (ws) await send('Browser.close');
@@ -258,7 +285,173 @@ try {
     console.log('徽标数量:', counts.badges);
     if (!counts.badges) throw new Error('提取后没有渲染任何徽标');
 
-    // 4. 用“导入文件”走一遍真实翻译链路
+    // 4. 选区查找：只选中一段文本的一部分，应高亮完整段落
+    const partialSelection = await evaluate(`
+        (() => {
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            let node;
+            while ((node = walker.nextNode())) {
+                const parent = node.parentElement;
+                if (!parent || parent.closest('[data-maurice-panel]')) continue;
+                const text = node.textContent || '';
+                const start = text.search(/[A-Za-z]/);
+                if (start < 0) continue;
+                const rect = parent.getBoundingClientRect();
+                if (rect.width < 4 || rect.height < 4) continue;
+
+                const range = document.createRange();
+                range.setStart(node, start);
+                range.setEnd(node, Math.min(text.length, start + 4));
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return { text: range.toString(), rect: range.getBoundingClientRect().toJSON() };
+            }
+            return null;
+        })()
+    `);
+    if (!partialSelection || !partialSelection.text.trim()) {
+        throw new Error('没能在页面上选中一段测试文本');
+    }
+    await sleep(150);
+    await clickPanelButton('查找');
+
+    const partialResult = await poll('选区查找（部分选中）', async () => {
+        const text = await getPanelResult();
+        return /属于 P\d+-\d+/.test(text) ? text : '';
+    }, 15000);
+
+    const partialHighlight = await evaluate(`
+        [...document.documentElement.children].filter(
+            (el) => el.style && el.style.zIndex === '2147483645'
+        ).length
+    `);
+    console.log('部分选中:', partialSelection.text.trim(), '→', partialResult.replace(/\n/g, ' / '));
+    if (!partialHighlight) throw new Error('选区查找没有画出高亮框');
+
+    // 5. 右键拖动 + 超过 2 条标注时只高亮选区
+    await evaluate(`
+        (() => {
+            const box = document.createElement('div');
+            box.id = 'maurice-smoke-selection';
+            Object.assign(box.style, {
+                position: 'fixed',
+                left: '40px',
+                top: '560px',
+                zIndex: '2147483644',
+                background: '#fff',
+                color: '#000',
+                padding: '10px',
+                fontFamily: 'monospace',
+                fontSize: '16px'
+            });
+            box.innerHTML = [
+                '<span>AlphaOne</span>',
+                '<span>BetaTwo</span>',
+                '<span>GammaThree</span>'
+            ].join(' ');
+            document.body.appendChild(box);
+            return true;
+        })()
+    `);
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-el="result"]').textContent = '';
+            return true;
+        })()
+    `);
+    await clickPanelButton('提取并保存');
+    await poll('测试容器提取完成', async () => {
+        const text = await getPanelResult();
+        return text.includes('共提取') ? text : '';
+    }, 30000);
+
+    const rightDragText = await evaluate(`
+        (() => {
+            const box = document.getElementById('maurice-smoke-selection');
+            const span = box.querySelectorAll('span')[1];
+            const rect = span.getBoundingClientRect();
+            const y = rect.top + rect.height / 2;
+            const startX = rect.left + 6;
+            const endX = rect.right - 6;
+
+            const fire = (type, x, buttons) => {
+                document.dispatchEvent(new MouseEvent(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    button: 2,
+                    buttons,
+                    clientX: x,
+                    clientY: y
+                }));
+            };
+
+            fire('mousedown', startX, 2);
+            fire('mousemove', (startX + endX) / 2, 2);
+            fire('mousemove', endX, 2);
+            fire('mouseup', endX, 0);
+
+            return window.getSelection().toString();
+        })()
+    `);
+    if (!rightDragText.trim()) throw new Error('右键拖动没有产生选区');
+    await sleep(150);
+    await clickPanelButton('查找');
+
+    const rightDragResult = await poll('右键选区查找', async () => {
+        const text = await getPanelResult();
+        return /属于 P\d+-\d+/.test(text) ? text : '';
+    }, 15000);
+    console.log('右键拖动:', rightDragText.trim(), '→', rightDragResult.replace(/\n/g, ' / '));
+
+    const multiSelection = await evaluate(`
+        (() => {
+            const box = document.getElementById('maurice-smoke-selection');
+            const spans = box.querySelectorAll('span');
+            const first = spans[0].firstChild;
+            const last = spans[2].firstChild;
+            const range = document.createRange();
+            range.setStart(first, 0);
+            range.setEnd(last, last.textContent.length);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return range.toString();
+        })()
+    `);
+    await sleep(150);
+    await clickPanelButton('查找');
+
+    const multiResult = await poll('多段选区查找', async () => {
+        const text = await getPanelResult();
+        return text.includes('3 条编号') && text.includes('只高亮') ? text : '';
+    }, 15000);
+    console.log('多段选中:', multiSelection.replace(/\s+/g, ' '), '→', multiResult.replace(/\n/g, ' / '));
+
+    // 清理测试容器，重新提取，避免影响截图
+    await evaluate(`
+        (() => {
+            const box = document.getElementById('maurice-smoke-selection');
+            if (box) box.remove();
+            window.getSelection().removeAllRanges();
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-el="result"]').textContent = '';
+            return true;
+        })()
+    `);
+    await clickPanelButton('提取并保存');
+    await poll('清理后重新提取', async () => {
+        const text = await getPanelResult();
+        return text.includes('共提取') ? text : '';
+    }, 60000);
+
+    // 6. 用“导入文件”走一遍真实翻译链路
     await evaluate(`
         (() => {
             const panel = [...document.documentElement.children].find(
@@ -321,7 +514,8 @@ try {
         throw new Error('词库列表没有显示 / 启用导入的词库');
     }
 
-    // 5. 截图
+    // 5. 截图（等选区高亮 4 秒自动消失，截图干净一些）
+    await sleep(4500);
     const screenshot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
 

@@ -131,17 +131,7 @@
             });
         }
 
-        /**
-         * 高亮一个文本节点并滚动到可见位置。
-         * @returns {boolean} 节点当前是否可见（隐藏文本无法高亮）
-         */
-        function highlight(node) {
-            clearHighlight();
-            if (!node || !node.isConnected) return false;
-
-            const rects = domUtils.getValidRects(node);
-            if (!rects.length) return false;
-
+        function paintRects(rects) {
             for (const rect of rects) {
                 const highlightEl = document.createElement('div');
                 Object.assign(highlightEl.style, {
@@ -159,17 +149,81 @@
                 document.documentElement.appendChild(highlightEl);
                 highlightEls.push(highlightEl);
             }
+        }
 
+        function scrollToRect(rect) {
             window.scrollTo({
-                top: rects[0].top + window.scrollY - window.innerHeight / 3,
+                top: rect.top + window.scrollY - window.innerHeight / 3,
                 behavior: 'smooth'
             });
+        }
 
-            const item = items.find((entry) => entry.node === node);
-            if (item) item.badge.style.background = constants.COLORS.badgeActive;
+        /**
+         * 高亮多个完整文本节点（例如选区覆盖 1～2 条标注）。
+         * @param {Array<Node>} nodes
+         * @returns {boolean} 是否至少高亮到一段
+         */
+        function highlightNodes(nodes) {
+            clearHighlight();
+
+            const targets = (nodes || []).filter((node) => node && node.isConnected);
+            if (!targets.length) return false;
+
+            const rects = [];
+            let firstRect = null;
+            for (const node of targets) {
+                const nodeRects = domUtils.getValidRects(node);
+                if (!nodeRects.length) continue;
+                if (!firstRect) firstRect = nodeRects[0];
+                rects.push(...nodeRects);
+            }
+            if (!rects.length) return false;
+
+            paintRects(rects);
+            scrollToRect(firstRect);
+
+            for (const node of targets) {
+                const item = items.find((entry) => entry.node === node);
+                if (item) item.badge.style.background = constants.COLORS.badgeActive;
+            }
 
             highlightTimer = setTimeout(clearHighlight, constants.HIGHLIGHT_DURATION_MS);
             return true;
+        }
+
+        /**
+         * 只高亮选中的那一段（选区覆盖超过 2 条标注时用）。
+         * @param {Range} range
+         * @returns {boolean} 是否高亮成功
+         */
+        function highlightRange(range) {
+            clearHighlight();
+            if (!range) return false;
+
+            let rects;
+            try {
+                rects = Array.from(range.getClientRects()).filter(
+                    (rect) =>
+                        rect.width >= constants.MIN_RECT_WIDTH &&
+                        rect.height >= constants.MIN_RECT_HEIGHT
+                );
+            } catch (_) {
+                return false;
+            }
+            if (!rects.length) return false;
+
+            paintRects(rects);
+            scrollToRect(rects[0]);
+            highlightTimer = setTimeout(clearHighlight, constants.HIGHLIGHT_DURATION_MS);
+            return true;
+        }
+
+        /**
+         * 高亮单个文本节点（快捷方式）。
+         * @returns {boolean} 节点当前是否可见（隐藏文本无法高亮）
+         */
+        function highlight(node) {
+            return highlightNodes([node]);
         }
 
         function show() {
@@ -190,6 +244,8 @@
             clear,
             reposition,
             highlight,
+            highlightNodes,
+            highlightRange,
             clearHighlight,
             show,
             hide,
