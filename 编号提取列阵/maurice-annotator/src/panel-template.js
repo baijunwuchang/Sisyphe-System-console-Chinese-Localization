@@ -18,7 +18,11 @@
 
         return `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <strong style="font-size:13px;">Maurice 标注 / 汉化</strong>
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <strong style="font-size:13px;">Maurice 标注 / 汉化</strong>
+          <span style="color:#888;font-size:10px;line-height:1.35;">本插件部分内容使用AI制作，完全开源</span>
+          <span style="color:#f59e0b;font-size:10px;line-height:1.35;">快捷键：Alt+M（F1 可能被浏览器帮助页占用）</span>
+        </div>
         <button data-act="close" title="关闭" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;line-height:1;">×</button>
       </div>
 
@@ -51,6 +55,21 @@
             <button data-act="save-page" style="flex:1;padding:5px;background:#7c3aed;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">存当前页</button>
             <button data-act="del-trans" style="flex:1;padding:5px;background:#b91c1c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">删除</button>
           </div>
+        </div>
+
+        <div style="background:#111;border-radius:4px;padding:8px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="color:#aaa;font-size:11px;">共享词库</span>
+            <button data-act="refresh-uploads" style="padding:3px 8px;background:#334155;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">刷新我的上传</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:4px;">
+            <input data-el="server-code" maxlength="5" placeholder="输入编号，如 010" style="flex:1;background:#1a1a1a;border:1px solid #444;color:#eee;padding:5px 7px;border-radius:4px;font-family:monospace;font-size:11px;" />
+            <button data-act="download-server" style="padding:5px 10px;background:#0ea5e9;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">下载编号</button>
+          </div>
+          <div style="color:#666;font-size:10px;line-height:1.5;">
+            001 / 002 会在打开面板时自动下载，默认不勾选；每人最多上传 4 个，普通编号从 010 开始。
+          </div>
+          <div data-el="uploads" style="max-height:110px;overflow:auto;margin-top:6px;font-family:monospace;font-size:10px;line-height:1.7;color:#999;">（点“刷新我的上传”查看自己上传的文件）</div>
         </div>
 
         <div style="background:#111;border-radius:4px;padding:8px;margin-bottom:10px;">

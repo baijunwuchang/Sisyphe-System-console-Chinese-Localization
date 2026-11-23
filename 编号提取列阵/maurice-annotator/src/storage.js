@@ -36,7 +36,8 @@
             pageCounter: 0,
             pages: {},
             dicts: {},
-            activeDicts: []
+            activeDicts: [],
+            clientId: ''
         };
 
         /** 从存储重新读取（多标签页共享数据，操作前读一次最稳） */
@@ -49,6 +50,7 @@
             state.activeDicts = Array.isArray(data.activeDicts)
                 ? data.activeDicts.slice()
                 : [];
+            state.clientId = typeof data.clientId === 'string' ? data.clientId : '';
             return state;
         }
 
@@ -58,7 +60,8 @@
                 pageCounter: state.pageCounter,
                 pages: state.pages,
                 dicts: state.dicts,
-                activeDicts: state.activeDicts
+                activeDicts: state.activeDicts,
+                clientId: state.clientId
             });
         }
 
@@ -80,13 +83,18 @@
             await area.set({ pages: state.pages });
         }
 
+        async function saveClientId() {
+            await area.set({ clientId: state.clientId });
+        }
+
         return {
             state,
             load,
             saveAll,
             saveDicts,
             savePageIndex,
-            savePages
+            savePages,
+            saveClientId
         };
     }
 

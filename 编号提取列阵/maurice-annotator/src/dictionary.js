@@ -259,6 +259,92 @@
             return true;
         }
 
+        /**
+         * 安装/更新从服务器下载的词库。
+         * 用 server-<编号> 作为固定 key，重复下载会覆盖内容但保留启用状态。
+         * @param {{code:string,title:string,description:string,content:object,activate?:boolean}} input
+         */
+        async function installServerFile({ code, title, description, content, updatedAt = 0, activate = false }) {
+            const key = constants.SERVER_DICT_PREFIX + code;
+            const existing = store.state.dicts[key];
+            const wasActive = existing
+                ? store.state.activeDicts.includes(key)
+                : false;
+
+            const rawTitle = String(
+                title || (content && content.name) || code
+            );
+            const displayTitle = rawTitle.startsWith(code + ' ') || rawTitle === code
+                ? rawTitle
+                : `${code} ${rawTitle}`;
+
+            store.state.dicts[key] = {
+                name: (content && content.name) || rawTitle,
+                title: displayTitle,
+                serverCode: code,
+                serverUpdatedAt: Number(updatedAt) || 0,
+                description: description || (content && content.description) || '',
+                version: (content && content.version) || '',
+                author: (content && content.author) || '',
+                global: (content && content.global) || {},
+                perPage: (content && content.perPage) || {}
+            };
+
+            const shouldActivate = activate || wasActive;
+            const index = store.state.activeDicts.indexOf(key);
+            if (shouldActivate && index === -1) {
+                store.state.activeDicts.push(key);
+            } else if (!shouldActivate && index !== -1) {
+                store.state.activeDicts.splice(index, 1);
+            }
+
+            await store.saveDicts();
+            return {
+                key,
+                isNew: !existing,
+                active: store.state.activeDicts.includes(key)
+            };
+        }
+
+        /** 给本地词库记录“已上传到服务器”的编号 */
+        async function attachServerCode(name, code, title) {
+            const dict = store.state.dicts[name];
+            if (!dict) throw new Error(`找不到词库「${name}」`);
+            dict.serverCode = code;
+            if (title) dict.title = title;
+            await store.saveDicts();
+        }
+
+        /** 解除词库与服务器编号的关联（服务器文件删除后） */
+        async function detachServerCode(name) {
+            const dict = store.state.dicts[name];
+            if (!dict) return;
+            delete dict.serverCode;
+            await store.saveDicts();
+        }
+
+        function findByServerCode(code) {
+            for (const name of Object.keys(store.state.dicts)) {
+                if (store.state.dicts[name].serverCode === code) {
+                    return { name, dict: store.state.dicts[name] };
+                }
+            }
+            return null;
+        }
+
+        /** 删除服务器文件后，解除所有本地副本的编号关联 */
+        async function detachServerCodeByCode(code) {
+            const names = [];
+            for (const name of Object.keys(store.state.dicts)) {
+                if (store.state.dicts[name].serverCode === code) {
+                    delete store.state.dicts[name].serverCode;
+                    names.push(name);
+                }
+            }
+            if (names.length) await store.saveDicts();
+            return names;
+        }
+
         function countWords(dict) {
             if (!dict) return 0;
             const words = new Set(Object.keys(dict.global || {}));
@@ -277,11 +363,12 @@
                 const isCustom = name === constants.CUSTOM_DICT_NAME;
                 return {
                     name,
-                    label: isCustom ? '面板内随手记的' : name,
+                    label: dict.title || (isCustom ? '面板内随手记的' : name),
                     description: dict.description || '',
                     count: countWords(dict),
                     active: store.state.activeDicts.includes(name),
-                    deletable: !isCustom
+                    deletable: !isCustom,
+                    serverCode: dict.serverCode || null
                 };
             });
         }
@@ -331,6 +418,11 @@
             setOnly,
             applyTable,
             remove,
+            installServerFile,
+            attachServerCode,
+            detachServerCode,
+            findByServerCode,
+            detachServerCodeByCode,
             countWords,
             list,
             mergeEnabled,

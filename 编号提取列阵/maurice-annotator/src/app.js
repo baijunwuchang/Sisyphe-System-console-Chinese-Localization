@@ -10,6 +10,7 @@
     /**
      * @param {object} deps
      * @param {object} deps.session 共享会话状态 { pageId: string|null }
+     * @param {object} deps.constants
      * @param {object} deps.store
      * @param {object} deps.pageRegistry
      * @param {object} deps.dictionary
@@ -20,10 +21,12 @@
      * @param {object} deps.exporters
      * @param {object} deps.transfer
      * @param {object} deps.textTable 可编辑对照表
+     * @param {object} deps.serverApi 共享服务器 API
      * @param {object} deps.selection 选区服务
      */
     function createApp({
         session,
+        constants,
         store,
         pageRegistry,
         dictionary,
@@ -34,23 +37,60 @@
         exporters,
         transfer,
         textTable,
+        serverApi,
         selection
     }) {
         /** 当前页的提取结果（含 DOM 引用，仅内存） */
         let annotations = [];
 
         let readyPromise = null;
+        let basePromise = null;
+        let initialServerPromise = null;
+
+        function generateClientId() {
+            if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+                return globalThis.crypto.randomUUID();
+            }
+            return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+        }
+
+        async function ensureClientId() {
+            if (!store.state.clientId) {
+                store.state.clientId = generateClientId();
+                await store.saveClientId();
+            }
+            return store.state.clientId;
+        }
+
+        /** 用页面的持久编号表提取，保证重复提取不会重排旧编号 */
+        function extractWithStableIds(pageId) {
+            const allocator = pageRegistry.createIdAllocator(pageId);
+            return extractor.extractAll(pageId, {
+                allocateTextId: (meta) => allocator.allocate(meta)
+            });
+        }
+
+        /** 只加载存储 / clientId / 词库，不等待整页提取 */
+        function ensureBase() {
+            if (!basePromise) {
+                basePromise = (async () => {
+                    await store.load();
+                    await ensureClientId();
+                    await dictionary.init();
+                })();
+            }
+            return basePromise;
+        }
 
         async function doInit() {
-            await store.load();
-            await dictionary.init();
+            await ensureBase();
 
             session.pageId = await pageRegistry.resolvePageId();
             translator.rebuild(session.pageId);
 
             // 与旧版一致：先把已有词库应用上去，再抓一遍当前文本备用
             translator.apply(session.pageId);
-            annotations = extractor.extractAll(session.pageId).annotations;
+            annotations = extractWithStableIds(session.pageId).annotations;
 
             // 页面动态变化时，若有徽标则重新贴合
             translator.startObserver({
@@ -77,7 +117,7 @@
         /** 取当前页文本，必要时补一次提取（不落盘） */
         function ensureAnnotations() {
             if (!annotations.length && session.pageId) {
-                annotations = extractor.extractAll(session.pageId).annotations;
+                annotations = extractWithStableIds(session.pageId).annotations;
             }
             return annotations;
         }
@@ -91,7 +131,7 @@
             session.pageId = await pageRegistry.resolvePageId();
             translator.rebuild(session.pageId);
 
-            const { annotations: list, stats } = extractor.extractAll(session.pageId);
+            const { annotations: list, stats } = extractWithStableIds(session.pageId);
             annotations = list;
 
             await pageRegistry.recordPage(session.pageId, {
@@ -253,6 +293,190 @@
             );
         }
 
+        // ===== 共享服务器 =====
+
+        function requireServerCode(input) {
+            const code = serverApi.normalizeCode(input);
+            if (!code) {
+                throw new Error('编号不合法：请输入 1~5 位数字（001 / 002 / 010 起）');
+            }
+            return code;
+        }
+
+        /** 下载某个服务器编号的词库；默认只下载，不启用 */
+        async function downloadServerFile(input) {
+            await init();
+            await store.load();
+
+            const code = requireServerCode(input);
+            const data = await serverApi.getFile(code);
+            const file = data.file || {};
+            if (!file.content) throw new Error('服务器文件内容为空');
+
+            const installed = await dictionary.installServerFile({
+                code: file.code || code,
+                title: file.title || code,
+                description: file.description || '',
+                content: file.content,
+                updatedAt: file.updated_at,
+                activate: false
+            });
+
+            let count = 0;
+            if (installed.active) {
+                count = await reapply();
+            }
+
+            return (
+                `已下载 #${file.code || code}「${file.title || code}」\n` +
+                (installed.active
+                    ? `词库已启用，页面更新了 ${count} 个节点`
+                    : '默认不勾选；在词库列表勾选后才会启用')
+            );
+        }
+
+        /**
+         * 面板打开时自动下载/更新 001 / 002，但不勾选。
+         * 已存在且服务器 updated_at 没变才跳过。
+         */
+        function ensureInitialServerFiles() {
+            if (initialServerPromise) return initialServerPromise;
+
+            initialServerPromise = (async () => {
+                await ensureBase();
+
+                const downloaded = [];
+                const errors = [];
+                let needsReapply = false;
+
+                for (const code of constants.SERVER_INITIAL_CODES) {
+                    const existing = dictionary.findByServerCode(code);
+                    let file;
+                    try {
+                        const data = await serverApi.getFile(code);
+                        file = data.file || {};
+                        if (!file.content) throw new Error('内容为空');
+                    } catch (error) {
+                        // 已经有本地副本时，服务器暂时不可用不影响使用
+                        if (!existing) errors.push(`${code}：${error.message}`);
+                        continue;
+                    }
+
+                    const serverUpdated = Number(file.updated_at) || 0;
+                    if (existing && Number(existing.dict.serverUpdatedAt) >= serverUpdated && serverUpdated > 0) {
+                        continue;
+                    }
+
+                    const installed = await dictionary.installServerFile({
+                        code: file.code || code,
+                        title: file.title || code,
+                        description: file.description || '',
+                        content: file.content,
+                        updatedAt: serverUpdated,
+                        activate: false
+                    });
+                    if (installed.active) needsReapply = true;
+                    downloaded.push(code);
+                }
+
+                if (needsReapply) await reapply();
+
+                const result = { downloaded, errors };
+                // 网络失败时允许下次打开面板再试
+                if (errors.length) initialServerPromise = null;
+                return result;
+            })();
+
+            return initialServerPromise;
+        }
+
+        /** 查询 001 / 002 的作者声明进度 */
+        async function queryProgress(input) {
+            await init();
+            const code = requireServerCode(input);
+            if (code !== '001' && code !== '002') {
+                throw new Error('进度查询只支持 001 / 002');
+            }
+
+            const data = await serverApi.getProgress();
+            const progress = (data.progress && data.progress[code]) || {};
+            const translated = Number(progress.translated) || 0;
+            const total = Number(progress.total) || 0;
+            const percent = total > 0 ? Math.round((translated / total) * 100) : null;
+            const updated = Number(progress.updated_at) > 0
+                ? new Date(Number(progress.updated_at) * 1000).toLocaleString()
+                : '尚未更新';
+
+            return (
+                `${code} 翻译进度（作者声明）\n` +
+                (total > 0
+                    ? `已翻译：${translated} / ${total} 条（${percent}%）`
+                    : `已翻译：${translated} 条（总条数尚未填写）`) +
+                `\n备注：${progress.note || '（无）'}\n` +
+                `更新时间：${updated}`
+            );
+        }
+
+        /** 把本地词库上传到共享服务器 */
+        async function uploadDict(name) {
+            await init();
+            await store.load();
+
+            const dict = dictionary.get(name);
+            if (!dict) throw new Error(`找不到词库「${name}」`);
+            if (dict.serverCode) {
+                throw new Error(`这个词库已经上传为 #${dict.serverCode}`);
+            }
+
+            const payload = dictionary.toPayload(name);
+            if (!payload) throw new Error('无法读取词库内容');
+
+            const clientId = await ensureClientId();
+            const result = await serverApi.upload({
+                clientId,
+                title: dict.title || name,
+                description: dict.description || '',
+                content: payload
+            });
+
+            await dictionary.attachServerCode(name, result.code, result.title);
+
+            return (
+                `已上传「${name}」→ 服务器编号 #${result.code}\n` +
+                `还可上传 ${result.remaining} 个（每人最多 ${constants.SERVER_MAX_UPLOADS} 个）`
+            );
+        }
+
+        async function listMyUploads() {
+            await init();
+            await store.load();
+            const clientId = await ensureClientId();
+            const data = await serverApi.listMine(clientId);
+            return data.files || [];
+        }
+
+        async function deleteUpload(input) {
+            await init();
+            await store.load();
+
+            const code = requireServerCode(input);
+            const clientId = await ensureClientId();
+            await serverApi.deleteMine({ clientId, code });
+
+            // 删除服务器文件时，同步移除它的本地镜像（server-<编号>），保留用户自己的本地词库
+            const mirrorKey = constants.SERVER_DICT_PREFIX + code;
+            if (store.state.dicts[mirrorKey]) {
+                await dictionary.remove(mirrorKey);
+            }
+            const detached = await dictionary.detachServerCodeByCode(code);
+            const count = await reapply();
+
+            return (
+                `已从服务器删除 #${code}${detached.length ? '（本地词库保留）' : ''}\n` +
+                `页面更新了 ${count} 个节点`
+            );
+        }
+
         // ===== 查词 =====
 
         async function find(query) {
@@ -367,6 +591,12 @@
             loadDictAlone,
             deleteDict,
             importFile,
+            ensureInitialServerFiles,
+            downloadServerFile,
+            queryProgress,
+            uploadDict,
+            listMyUploads,
+            deleteUpload,
             exportAll,
             exportTable,
             exportTranslated,

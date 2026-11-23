@@ -28,6 +28,7 @@
         'createFinder',
         'createExportBuilders',
         'createTextTable',
+        'createServerApi',
         'createTransfer',
         'createExporters',
         'createApp',
@@ -82,6 +83,7 @@
     const finder = M.createFinder({ store, constants, badges, translator, selection });
     const builders = M.createExportBuilders({ constants });
     const textTable = M.createTextTable({ constants });
+    const serverApi = M.createServerApi({ constants });
 
     const exporters = M.createExporters({
         store,
@@ -95,6 +97,7 @@
 
     const app = M.createApp({
         session,
+        constants,
         store,
         pageRegistry,
         dictionary,
@@ -105,6 +108,7 @@
         exporters,
         transfer,
         textTable,
+        serverApi,
         selection
     });
 
@@ -121,15 +125,19 @@
         .then(() => panel.update())
         .catch((error) => console.error('[Maurice] 初始化失败', error));
 
-    // F1 开关面板（捕获阶段，避免被页面自己的快捷键吃掉）
+    // 面板快捷键：Alt+M 为主（F1 常被浏览器帮助页占用，仅作兼容尝试）
     document.addEventListener(
         'keydown',
         (event) => {
-            if (event.key === 'F1') {
-                event.preventDefault();
-                event.stopPropagation();
-                panel.toggle();
-            }
+            const isAltM = event.altKey &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                String(event.key).toLowerCase() === 'm';
+            if (event.key !== 'F1' && !isAltM) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            panel.toggle();
         },
         true
     );

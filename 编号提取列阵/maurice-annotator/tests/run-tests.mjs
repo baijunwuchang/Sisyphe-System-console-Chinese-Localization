@@ -300,6 +300,66 @@ await test('单独加载：只保留一个启用词库', async () => {
     await assert.rejects(() => dicts.setOnly('missing'), /找不到/);
 });
 
+await test('服务器编号规范化：001 / 002 / 010 起 / 最多 5 位', () => {
+    const api = M.createServerApi({ constants });
+    assert.equal(api.normalizeCode('1'), '001');
+    assert.equal(api.normalizeCode('001'), '001');
+    assert.equal(api.normalizeCode('2'), '002');
+    assert.equal(api.normalizeCode('9'), null);
+    assert.equal(api.normalizeCode('10'), '010');
+    assert.equal(api.normalizeCode('100'), '100');
+    assert.equal(api.normalizeCode('1000'), '1000');
+    assert.equal(api.normalizeCode('99999'), '99999');
+    assert.equal(api.normalizeCode('100000'), null);
+    assert.equal(api.normalizeCode('abc'), null);
+});
+
+await test('服务器词库：默认不启用、可记录上传编号', async () => {
+    const { store } = await createHarness();
+    const dicts = M.createDictionary({ store, constants });
+    await dicts.init();
+
+    const first = await dicts.installServerFile({
+        code: '001',
+        title: '001 人工翻译',
+        description: '初始文件',
+        content: {
+            format: 'maurice-dict',
+            name: '001 人工翻译',
+            global: { A: '甲' },
+            perPage: {}
+        },
+        updatedAt: 12345,
+        activate: false
+    });
+
+    assert.equal(first.key, 'server-001');
+    assert.equal(first.active, false);
+    assert.equal(dicts.findByServerCode('001').dict.serverUpdatedAt, 12345);
+    assert.equal(dicts.findByServerCode('001').name, 'server-001');
+    assert.equal(dicts.lookupExact('A', 'P1'), null);
+
+    await dicts.installServerFile({
+        code: '001',
+        title: '001 人工翻译',
+        description: '初始文件',
+        content: {
+            format: 'maurice-dict',
+            name: '001 人工翻译',
+            global: { A: '甲' },
+            perPage: {}
+        },
+        activate: true
+    });
+    assert.equal(dicts.lookupExact('A', 'P1'), '甲');
+    assert.equal(dicts.list().find((d) => d.serverCode === '001').active, true);
+
+    await dicts.attachServerCode('custom', '010', '上传测试');
+    assert.equal(dicts.findByServerCode('010').name, 'custom');
+    await dicts.detachServerCode('custom');
+    assert.equal(dicts.findByServerCode('010'), null);
+});
+
 /* ------------------------------------------------------------------ */
 /* 4. 页号（仅内部）                                                   */
 /* ------------------------------------------------------------------ */
@@ -353,6 +413,98 @@ await test('保存快照后可按页读取，且不必展示给用户', async ()
     assert.deepEqual(plain(registry.listPageIds()), ['P1']);
     assert.equal(registry.getPage('P1').texts.length, 1);
     assert.equal(registry.getPage('P1').url, 'https://example.test/a');
+});
+
+await test('重复提取：旧文本复用编号，新文本只拿新号', async () => {
+    const { store } = await createHarness();
+    const registry = M.createPageRegistry({
+        store,
+        constants,
+        getUrlKey: () => '/a'
+    });
+    const pageId = await registry.resolvePageId();
+
+    let allocator = registry.createIdAllocator(pageId);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Alpha' }), 1);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Beta' }), 2);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Gamma' }), 3);
+
+    // 模拟第二次提取：Beta 暂时消失，Gamma 仍在；保存快照
+    await registry.recordPage(pageId, {
+        url: 'https://example.test/a',
+        title: '标题',
+        texts: [
+            { id: 'P1-1', pageId, textId: 1, type: 'ui', text: 'Alpha' },
+            { id: 'P1-3', pageId, textId: 3, type: 'ui', text: 'Gamma' }
+        ]
+    });
+
+    // 重新读存储后再分配：Alpha / Gamma / Beta 都保持原号，新文本续号
+    await store.load();
+    allocator = registry.createIdAllocator(pageId);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Alpha' }), 1);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Gamma' }), 3);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Beta' }), 2);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Delta' }), 4);
+});
+
+await test('旧快照迁移：保留 textId，并从最大号继续', async () => {
+    const { store } = await createHarness({
+        pages: {
+            P1: {
+                url: 'https://example.test/a',
+                title: '旧页面',
+                texts: [
+                    { id: 'P1-5', pageId: 'P1', textId: 5, type: 'ui', text: 'Alpha' },
+                    { id: 'P1-9', pageId: 'P1', textId: 9, type: 'ui', text: 'Beta' }
+                ]
+            }
+        }
+    });
+    const registry = M.createPageRegistry({
+        store,
+        constants,
+        getUrlKey: () => '/a'
+    });
+
+    const allocator = registry.createIdAllocator('P1');
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Alpha' }), 5);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Beta' }), 9);
+    assert.equal(allocator.allocate({ type: 'ui', text: 'Gamma' }), 10);
+});
+
+await test('旧快照已有重复编号：迁移时自动去重', async () => {
+    const { store } = await createHarness({
+        pages: {
+            P1: {
+                url: 'https://example.test/a',
+                title: '旧页面',
+                texts: [
+                    { id: 'P1-5', pageId: 'P1', textId: 5, type: 'ui', text: 'Alpha' },
+                    { id: 'P1-5', pageId: 'P1', textId: 5, type: 'ui', text: 'Beta' },
+                    { id: 'P1-9', pageId: 'P1', textId: 9, type: 'ui', text: 'Gamma' }
+                ]
+            }
+        }
+    });
+    const registry = M.createPageRegistry({
+        store,
+        constants,
+        getUrlKey: () => '/a'
+    });
+
+    const allocator = registry.createIdAllocator('P1');
+    const alpha = allocator.allocate({ type: 'ui', text: 'Alpha' });
+    const beta = allocator.allocate({ type: 'ui', text: 'Beta' });
+    const gamma = allocator.allocate({ type: 'ui', text: 'Gamma' });
+    const delta = allocator.allocate({ type: 'ui', text: 'Delta' });
+
+    assert.equal(alpha, 5);
+    assert.equal(gamma, 9);
+    assert.notEqual(beta, 5);
+    assert.notEqual(beta, 9);
+    assert.equal(beta, 10);
+    assert.equal(delta, 11);
 });
 
 /* ------------------------------------------------------------------ */
@@ -763,9 +915,12 @@ await test('面板不再包含页号、新页号、页面列表', () => {
     assert.ok(!markup.includes('data-act="refresh"'));
     assert.ok(markup.includes('提取并保存'));
     assert.ok(markup.includes('P1-42'), '编号格式提示应保留');
-    for (const label of ['清除译文', '导出全部（可编辑）', '导出已翻译', '导入对照表']) {
+    assert.ok(markup.includes('本插件部分内容使用AI制作，完全开源'));
+    assert.ok(markup.includes('Alt+M'));
+    for (const label of ['清除译文', '导出全部（可编辑）', '导出已翻译', '导入对照表', '刷新我的上传', '下载编号']) {
         assert.ok(markup.includes(label), `面板缺少“${label}”`);
     }
+    assert.ok(markup.includes('data-el="server-code"'));
 });
 
 await test('manifest 中列出的文件都存在，且模块全部登记', () => {

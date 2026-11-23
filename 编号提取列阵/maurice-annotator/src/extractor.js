@@ -15,13 +15,18 @@
     function createExtractor({ domUtils, constants, getOriginalText }) {
         /**
          * @param {string} pageId
+         * @param {{allocateTextId?: (meta:{type:string,text:string}) => number}} [options]
          * @returns {{annotations: Array<object>, stats: {total:number, visible:number, hidden:number}}}
          */
-        function extractAll(pageId) {
+        function extractAll(pageId, options = {}) {
             domUtils.resetVisibilityCache();
 
+            const allocateTextId = typeof options.allocateTextId === 'function'
+                ? options.allocateTextId
+                : null;
+
             const annotations = [];
-            let textId = 0;
+            let fallbackId = 0;
             let visibleCount = 0;
 
             domUtils.forEachTextNode(document.body, (node) => {
@@ -34,7 +39,13 @@
                 // 含有韩文或英文才算待翻译文本
                 if (!constants.KOREAN_RE.test(text) && !constants.ENGLISH_RE.test(text)) return;
 
-                textId++;
+                const type = domUtils.getTextType(node);
+                let textId = allocateTextId ? allocateTextId({ type, text }) : 0;
+                if (!Number.isFinite(textId) || textId < 1) {
+                    fallbackId += 1;
+                    textId = fallbackId;
+                }
+
                 const visible = domUtils.isVisible(node);
                 if (visible) visibleCount++;
 
@@ -42,7 +53,7 @@
                     id: pageId + constants.TEXT_ID_SEPARATOR + textId,
                     pageId,
                     textId,
-                    type: domUtils.getTextType(node),
+                    type,
                     text,
                     node,
                     visible

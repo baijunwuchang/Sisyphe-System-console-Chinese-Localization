@@ -13,7 +13,8 @@
         'pageCounter',
         'pages',
         'dicts',
-        'activeDicts'
+        'activeDicts',
+        'clientId'
     ]);
 
     const constants = Object.freeze({
@@ -76,6 +77,19 @@
         // ---- 运行时消息 ----
         /** background 通知 content 开关面板的消息名 */
         TOGGLE_MESSAGE: 'toggle',
+        /** content 通过 background 代理服务器请求的消息名 */
+        SERVER_API_MESSAGE: 'maurice-api',
+
+        // ---- 共享服务器 ----
+        SERVER_API_BASE: 'http://47.80.59.80/maurice-api.php',
+        /** 作者保留的初始文件编号（默认下载但不在面板里默认启用） */
+        SERVER_INITIAL_CODES: Object.freeze(['001', '002']),
+        /** 普通用户上传编号从 010 开始 */
+        SERVER_MIN_UPLOAD_CODE: 10,
+        SERVER_MAX_CODE: 99999,
+        SERVER_MAX_UPLOADS: 4,
+        /** 服务器文件在本地词库里的 key 前缀 */
+        SERVER_DICT_PREFIX: 'server-',
 
         // ---- 界面 ----
         /** 面板根节点的标记 / 选择器（选区服务用它排除面板内部） */

@@ -4,8 +4,11 @@
   "version": "4.0",
   "description": "按 F1 标注文本，支持选区查找、隐藏文本提取、动态数字替换、可编辑对照表与词库管理",
   "permissions": ["activeTab", "scripting", "downloads", "storage"],
-  "host_permissions": ["https://lell1203.github.io/*"],
-  "action": { "default_title": "按 F1 打开面板" },
+  "host_permissions": [
+    "https://lell1203.github.io/*",
+    "http://47.80.59.80/*"
+  ],
+  "action": { "default_title": "按 Alt+M 打开面板（F1 可能被浏览器占用）" },
   "content_scripts": [
     {
       "matches": ["https://lell1203.github.io/*"],
@@ -24,6 +27,7 @@
         "src/finder.js",
         "src/export-builders.js",
         "src/text-table.js",
+        "src/server-api.js",
         "src/transfer.js",
         "src/exporters.js",
         "src/app.js",

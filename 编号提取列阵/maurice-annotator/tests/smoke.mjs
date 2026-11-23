@@ -34,6 +34,7 @@ const chrome = spawn(
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-background-networking',
+        '--disable-features=ExtensionDisableUnsupportedDeveloper',
         '--user-data-dir=' + profileDir,
         '--remote-debugging-port=' + port,
         '--disable-extensions-except=' + extensionPath,
@@ -134,6 +135,47 @@ async function getPanelResult() {
     `);
 }
 
+async function clearPanelResult() {
+    return evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            if (panel) panel.querySelector('[data-el="result"]').textContent = '';
+            return true;
+        })()
+    `);
+}
+
+async function findCurrentSelectionId() {
+    await clearPanelResult();
+    await clickPanelButton('查找');
+    const message = await poll('选区查找', async () => {
+        const text = await getPanelResult();
+        return /属于 P\d+-\d+/.test(text) ? text : '';
+    }, 15000);
+    return { message, id: (/P\d+-\d+/.exec(message) || [])[0] };
+}
+
+async function selectSmokeSpan(index, start, end) {
+    return evaluate(`
+        (() => {
+            const box = document.getElementById('maurice-smoke-selection');
+            if (!box) return null;
+            const span = box.querySelectorAll('span')[${index}];
+            if (!span || !span.firstChild) return null;
+            const node = span.firstChild;
+            const range = document.createRange();
+            range.setStart(node, ${start});
+            range.setEnd(node, Math.min(node.textContent.length, ${end}));
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return range.toString();
+        })()
+    `);
+}
+
 async function closeChrome() {
     try {
         if (ws) await send('Browser.close');
@@ -187,13 +229,16 @@ try {
         if (message.method === 'Log.entryAdded' && message.params.entry.level === 'error') {
             errors.push(message.params.entry.text);
         }
+        if (message.method === 'Page.javascriptDialogOpening') {
+            send('Page.handleJavaScriptDialog', { accept: true }).catch(() => {});
+        }
     };
 
     await send('Runtime.enable');
     await send('Log.enable');
     await send('Page.enable');
 
-    // 2. 等页面加载完，按 F1 打开面板
+    // 2. 等页面加载完，按 Alt+M 打开面板
     await poll('页面加载完成', () => evaluate(`document.readyState === 'complete'`), 30000);
 
     const openPanel = async () => {
@@ -204,14 +249,14 @@ try {
                 );
                 if (panels.length) return true;
                 document.dispatchEvent(new KeyboardEvent('keydown', {
-                    key: 'F1', code: 'F1', bubbles: true, cancelable: true
+                    key: 'm', code: 'KeyM', altKey: true, bubbles: true, cancelable: true
                 }));
                 return false;
             })()
         `);
     };
 
-    await poll('按 F1 后出现面板', async () => (await openPanel()) || null, 20000);
+    await poll('按 Alt+M 后出现面板', async () => (await openPanel()) || null, 20000);
 
     const panelInfo = await evaluate(`
         (() => {
@@ -239,7 +284,86 @@ try {
         throw new Error('分页控件没有被移除');
     }
 
-    // 3. 提取并检查徽标
+    // 3. 服务器：001 / 002 自动下载（不勾选），并测试手动下载编号
+    await sleep(5000);
+    const initialServerState = await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            const text = panel.innerText;
+            return {
+                has001: text.includes('001 人工翻译'),
+                has002: text.includes('002 AI 翻译'),
+                checked001: (() => {
+                    const box = panel.querySelector('[data-dict-toggle="server-001"]');
+                    return box ? box.checked : null;
+                })(),
+                result: panel.querySelector('[data-el="result"]').textContent
+            };
+        })()
+    `);
+    console.log('初始服务器文件:', JSON.stringify(initialServerState));
+    if (!initialServerState.has001 || !initialServerState.has002) {
+        throw new Error('001 / 002 没有自动下载');
+    }
+    if (initialServerState.checked001 !== false) {
+        throw new Error('001 初始文件被默认勾选了');
+    }
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-dict-progress="001"]').click();
+            return true;
+        })()
+    `);
+    const progressResult = await poll('查询 001 进度', async () => {
+        const text = await getPanelResult();
+        return text.includes('001 翻译进度') ? text : '';
+    }, 20000);
+    console.log('查询进度:', progressResult.replace(/\n/g, ' / '));
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-dict-progress="002"]').click();
+            return true;
+        })()
+    `);
+    const progress002 = await poll('查询 002 进度', async () => {
+        const text = await getPanelResult();
+        return text.includes('002 翻译进度') && text.includes('52%') ? text : '';
+    }, 20000);
+    console.log('查询 002 进度:', progress002.replace(/\n/g, ' / '));
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-el="server-code"]').value = '001';
+            [...panel.querySelectorAll('button')]
+                .find((b) => b.dataset.act === 'download-server')
+                .click();
+            return true;
+        })()
+    `);
+
+    const serverDownloadResult = await poll('服务器编号下载', async () => {
+        const text = await getPanelResult();
+        return text.includes('已下载') || text.includes('出错') ? text : '';
+    }, 20000);
+    console.log('下载 001:', serverDownloadResult.replace(/\n/g, ' / '));
+    if (serverDownloadResult.includes('出错')) {
+        throw new Error('服务器下载失败：' + serverDownloadResult);
+    }
+
+    // 4. 提取并检查徽标
     await evaluate(`
         (() => {
             const panel = [...document.documentElement.children].find(
@@ -314,6 +438,7 @@ try {
         throw new Error('没能在页面上选中一段测试文本');
     }
     await sleep(150);
+    await clearPanelResult();
     await clickPanelButton('查找');
 
     const partialResult = await poll('选区查找（部分选中）', async () => {
@@ -400,6 +525,7 @@ try {
     `);
     if (!rightDragText.trim()) throw new Error('右键拖动没有产生选区');
     await sleep(150);
+    await clearPanelResult();
     await clickPanelButton('查找');
 
     const rightDragResult = await poll('右键选区查找', async () => {
@@ -424,6 +550,7 @@ try {
         })()
     `);
     await sleep(150);
+    await clearPanelResult();
     await clickPanelButton('查找');
 
     const multiResult = await poll('多段选区查找', async () => {
@@ -431,6 +558,47 @@ try {
         return text.includes('3 条编号') && text.includes('只高亮') ? text : '';
     }, 15000);
     console.log('多段选中:', multiSelection.replace(/\s+/g, ' '), '→', multiResult.replace(/\n/g, ' / '));
+
+    // 5.5 编号稳定：在前面插入新文本后，旧文本编号不能变
+    const alphaText = await selectSmokeSpan(0, 0, 5);
+    await sleep(150);
+    const alphaBefore = await findCurrentSelectionId();
+    if (!alphaBefore.id) throw new Error('没有查到 AlphaOne 的编号');
+    console.log('插入前 AlphaOne:', alphaText, '→', alphaBefore.id);
+
+    await evaluate(`
+        (() => {
+            const box = document.getElementById('maurice-smoke-selection');
+            const span = document.createElement('span');
+            span.textContent = 'ZeroText';
+            box.insertBefore(span, box.firstChild);
+            return true;
+        })()
+    `);
+
+    await clearPanelResult();
+    await clickPanelButton('提取并保存');
+    await poll('插入新文本后重新提取', async () => {
+        const text = await getPanelResult();
+        return text.includes('共提取') ? text : '';
+    }, 60000);
+
+    const alphaTextAfter = await selectSmokeSpan(1, 0, 5);
+    await sleep(150);
+    const alphaAfter = await findCurrentSelectionId();
+    console.log('插入后 AlphaOne:', alphaTextAfter, '→', alphaAfter.id);
+
+    if (alphaAfter.id !== alphaBefore.id) {
+        throw new Error(`旧文本编号发生变化：${alphaBefore.id} → ${alphaAfter.id}`);
+    }
+
+    await selectSmokeSpan(0, 0, 4);
+    await sleep(150);
+    const zeroResult = await findCurrentSelectionId();
+    console.log('新增 ZeroText:', zeroResult.id);
+    if (!zeroResult.id || zeroResult.id === alphaBefore.id) {
+        throw new Error('新增文本没有拿到独立编号，发生了编号复用');
+    }
 
     // 清理测试容器，重新提取，避免影响截图
     await evaluate(`
@@ -677,7 +845,73 @@ try {
     console.log('导出对照表:', tableExport.replace(/\n/g, ' / '));
     console.log('导出已翻译:', translatedExport.replace(/\n/g, ' / '));
 
-    // 11. 截图（等选区高亮 4 秒自动消失，截图干净一些）
+    // 11. 上传 smoke-demo 到共享服务器 → 查看我的上传 → 下载 → 删除
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            const button = panel.querySelector('[data-dict-upload="smoke-demo"]');
+            if (!button) return false;
+            button.click();
+            return true;
+        })()
+    `);
+
+    const uploadResult = await poll('上传词库到服务器', async () => {
+        const text = await getPanelResult();
+        return text.includes('已上传') ? text : '';
+    }, 30000);
+    const uploadCode = (/#(\d{3,5})/.exec(uploadResult) || [])[1];
+    if (!uploadCode) throw new Error('上传成功但没有解析到编号：' + uploadResult);
+    console.log('上传服务器:', uploadResult.replace(/\n/g, ' / '));
+
+    await clickPanelButton('刷新我的上传');
+    const uploadList = await poll('我的上传列表', async () => {
+        const text = await evaluate(`
+            (() => {
+                const panel = [...document.documentElement.children].find(
+                    (el) => el.style && el.style.zIndex === '2147483647'
+                );
+                return panel.querySelector('[data-el="uploads"]').innerText;
+            })()
+        `);
+        return text.includes('#' + uploadCode) ? text : '';
+    }, 20000);
+    console.log('我的上传:', uploadList.replace(/\n/g, ' | '));
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-upload-download="${uploadCode}"]').click();
+            return true;
+        })()
+    `);
+    const uploadDownload = await poll('下载我的上传', async () => {
+        const text = await getPanelResult();
+        return text.includes('已下载') ? text : '';
+    }, 20000);
+
+    await evaluate(`
+        (() => {
+            const panel = [...document.documentElement.children].find(
+                (el) => el.style && el.style.zIndex === '2147483647'
+            );
+            panel.querySelector('[data-upload-delete="${uploadCode}"]').click();
+            return true;
+        })()
+    `);
+    const uploadDelete = await poll('删除我的上传', async () => {
+        const text = await getPanelResult();
+        return text.includes('已从服务器删除') ? text : '';
+    }, 20000);
+
+    console.log('下载上传:', uploadDownload.replace(/\n/g, ' / '));
+    console.log('删除上传:', uploadDelete.replace(/\n/g, ' / '));
+
+    // 12. 截图（等选区高亮 4 秒自动消失，截图干净一些）
     await sleep(4500);
     const screenshot = await send('Page.captureScreenshot', { format: 'png' });
     fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));

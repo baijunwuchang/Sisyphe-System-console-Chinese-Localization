@@ -59,17 +59,114 @@
         }
 
         /**
+         * 确保页面对象有稳定的文本编号表。
+         * 旧数据没有 textIdMap 时，从已有的 texts 快照迁移：
+         * 按“类型 + 原文 + 同文出现序号”建键，保留原来的 textId。
+         * 迁移时如果发现旧快照里已经有重复 textId，会给重复项重新分配新号，
+         * 避免“两段不同文本共用一个编号”的问题继续留在数据里。
+         * @param {string} pageId
+         */
+        function ensureTextIdState(pageId) {
+            let page = store.state.pages[pageId];
+            if (!page) {
+                page = store.state.pages[pageId] = {
+                    url: '',
+                    title: '',
+                    extractedAt: 0,
+                    texts: []
+                };
+            }
+
+            if (!page.textIdMap || typeof page.textIdMap !== 'object') {
+                page.textIdMap = {};
+                const occurrences = new Map();
+
+                for (const entry of page.texts || []) {
+                    const type = entry.type || 'ui';
+                    const text = String(entry.text == null ? '' : entry.text);
+                    const base = type + '\u0000' + text;
+                    const index = occurrences.get(base) || 0;
+                    occurrences.set(base, index + 1);
+                    const key = index === 0 ? base : base + '\u0000#' + index;
+
+                    const textId = Number(entry.textId) || 0;
+                    if (textId > 0) page.textIdMap[key] = textId;
+                }
+            }
+
+            // 清理重复 / 非法编号：第一个占用的编号保留，其余重新发号
+            const usedIds = new Set();
+            const pendingKeys = [];
+            let maxId = 0;
+
+            for (const [key, value] of Object.entries(page.textIdMap)) {
+                const textId = Number(value);
+                if (Number.isFinite(textId) && textId >= 1 && !usedIds.has(textId)) {
+                    usedIds.add(textId);
+                    maxId = Math.max(maxId, textId);
+                } else {
+                    pendingKeys.push(key);
+                }
+            }
+
+            let nextId = maxId + 1;
+            for (const key of pendingKeys) {
+                while (usedIds.has(nextId)) nextId += 1;
+                page.textIdMap[key] = nextId;
+                usedIds.add(nextId);
+                nextId += 1;
+            }
+
+            if (!Number.isFinite(page.nextTextId) || page.nextTextId < nextId) {
+                page.nextTextId = nextId;
+            }
+
+            return page;
+        }
+
+        /**
+         * 为一次提取创建编号分配器。
+         * 同一个文本（类型 + 原文 + 同文序号）永远复用第一次分到的编号；
+         * 新出现的文本分配新号，不会重排旧文本的编号。
+         * @param {string} pageId
+         */
+        function createIdAllocator(pageId) {
+            const page = ensureTextIdState(pageId);
+            const occurrences = new Map();
+
+            function allocate({ type, text }) {
+                const kind = type || 'ui';
+                const value = String(text == null ? '' : text);
+                const base = kind + '\u0000' + value;
+                const index = occurrences.get(base) || 0;
+                occurrences.set(base, index + 1);
+                const key = index === 0 ? base : base + '\u0000#' + index;
+
+                let textId = Number(page.textIdMap[key]);
+                if (!Number.isFinite(textId) || textId < 1) {
+                    textId = page.nextTextId;
+                    page.textIdMap[key] = textId;
+                    page.nextTextId += 1;
+                }
+                return textId;
+            }
+
+            return { allocate, getPage: () => page };
+        }
+
+        /**
          * 保存一次提取快照。pages 的结构与旧版一致，导出 / 查词仍然能用。
+         * 同时保留 textIdMap / nextTextId，保证再次提取编号不变。
          * @param {string} pageId
          * @param {{url:string,title:string,texts:Array<object>}} snapshot
          */
         async function recordPage(pageId, snapshot) {
-            store.state.pages[pageId] = {
-                url: snapshot.url,
-                title: snapshot.title,
-                extractedAt: Date.now(),
-                texts: snapshot.texts
-            };
+            const page = ensureTextIdState(pageId);
+            page.url = snapshot.url;
+            page.title = snapshot.title;
+            page.extractedAt = Date.now();
+            page.texts = snapshot.texts;
+            store.state.pages[pageId] = page;
             await store.savePages();
         }
 
@@ -88,6 +185,8 @@
             getCurrentPageId,
             resolvePageId,
             nextPageNumber,
+            ensureTextIdState,
+            createIdAllocator,
             recordPage,
             listPageIds,
             getPage
